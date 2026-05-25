@@ -76,8 +76,8 @@ const FinanceModule: React.FC<FinanceModuleProps> = ({ currentRole }) => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                     <h3 className="text-lg font-semibold text-slate-800 mb-4">Payment Status Summary</h3>
-                    <div className="h-64">
-                        <ResponsiveContainer width="100%" height="100%">
+                    <div className="h-64 w-full">
+                        <ResponsiveContainer width="100%" height={256}>
                             <BarChart data={chartData}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                 <XAxis dataKey="name" />
@@ -253,7 +253,7 @@ const FinanceModule: React.FC<FinanceModuleProps> = ({ currentRole }) => {
       {/* Main Chart */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 h-96">
         <h3 className="text-lg font-semibold text-slate-800 mb-6">Cash Flow Analysis</h3>
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height={384}>
           <AreaChart data={MOCK_CASHFLOW}>
             <defs>
               <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">

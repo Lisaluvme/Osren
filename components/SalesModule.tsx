@@ -140,8 +140,8 @@ const SalesModule = ({inventory}: {inventory: InventoryItem[]}) => {
                <div className="flex items-center justify-between mb-4">
                    <h3 className="font-bold text-slate-700 flex items-center"><Map className="w-4 h-4 mr-2" /> Sales by Postcode</h3>
                </div>
-               <div className="h-48 text-xs">
-                   <ResponsiveContainer width="100%" height="100%">
+               <div className="h-48 text-xs w-full">
+                   <ResponsiveContainer width="100%" height={192}>
                        <BarChart data={REGIONAL_SALES} layout="vertical">
                            <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
                            <XAxis type="number" hide />
@@ -158,8 +158,8 @@ const SalesModule = ({inventory}: {inventory: InventoryItem[]}) => {
                <div className="flex items-center justify-between mb-4">
                    <h3 className="font-bold text-slate-700 flex items-center"><PieChartIcon className="w-4 h-4 mr-2" /> Product Lines</h3>
                </div>
-               <div className="h-48 text-xs">
-                   <ResponsiveContainer width="100%" height="100%">
+               <div className="h-48 text-xs w-full">
+                   <ResponsiveContainer width="100%" height={192}>
                        <PieChart>
                            <Pie
                                data={PRODUCT_MIX}
@@ -186,8 +186,8 @@ const SalesModule = ({inventory}: {inventory: InventoryItem[]}) => {
                <div className="flex items-center justify-between mb-4">
                    <h3 className="font-bold text-slate-700 flex items-center"><Calendar className="w-4 h-4 mr-2" /> Seasonal Peaks</h3>
                </div>
-               <div className="h-48 text-xs">
-                   <ResponsiveContainer width="100%" height="100%">
+               <div className="h-48 text-xs w-full">
+                   <ResponsiveContainer width="100%" height={192}>
                        <LineChart data={SEASONAL_TRENDS}>
                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
                            <XAxis dataKey="month" tick={{fontSize: 10}} />
