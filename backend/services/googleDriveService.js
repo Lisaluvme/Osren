@@ -105,39 +105,40 @@ class GoogleSheetsService {
         const item = {};
         headers.forEach((header, index) => {
           const value = row[index];
+          const normalizedHeader = header.toLowerCase().trim();
           // Type conversion based on header
-          switch (header.toLowerCase()) {
+          switch (normalizedHeader) {
             case 'quantity':
             case 'minlevel':
-              item[header] = parseInt(value || 0);
+              item[normalizedHeader] = parseInt(value || 0);
               break;
             case 'unitcost':
             case 'sellingprice':
             case 'profit':
             case 'stockvalue':
-              item[header] = parseFloat(value || 0);
+              item[normalizedHeader] = parseFloat(value || 0);
               break;
             case 'lowstockflag':
-              item[header] = parseInt(value || 0);
+              item[normalizedHeader] = parseInt(value || 0);
               break;
             default:
-              item[header] = value || '';
+              item[normalizedHeader] = value || '';
           }
         });
 
         // Map to standard format
         const inventoryItem = {
-          id: item['ID'] || item['id'] || '',
-          name: item['Name'] || item['name'] || '',
-          sku: item['SKU'] || item['sku'] || '',
-          category: item['Category'] || item['category'] || '',
-          brand: item['Brand'] || item['brand'] || '',
-          quantity: item['Quantity'] || item['quantity'] || 0,
-          minLevel: item['MinLevel'] || item['minLevel'] || 10,
-          unitCost: item['UnitCost'] || item['unitCost'] || 0,
-          sellingPrice: item['SellingPrice'] || item['sellingPrice'] || 0,
-          supplier: item['Supplier'] || item['supplier'] || '',
-          lastMovement: item['LastMovement'] || item['lastMovement'] || '',
+          id: item['id'] || '',
+          name: item['name'] || '',
+          sku: item['sku'] || '',
+          category: item['category'] || '',
+          brand: item['brand'] || '',
+          quantity: item['quantity'] || 0,
+          minLevel: item['minlevel'] || 10,
+          unitCost: item['unitcost'] || 0,
+          sellingPrice: item['sellingprice'] || 0,
+          supplier: item['supplier'] || '',
+          lastMovement: item['lastmovement'] || '',
         };
 
         return this.calculateDerivedFields(inventoryItem);
@@ -152,42 +153,47 @@ class GoogleSheetsService {
 
   async updateInventory(inventory) {
     try {
-      // Prepare data with calculated fields
+      // Define headers
+      const headers = [
+        'ID', 'Name', 'SKU', 'Category', 'Brand', 'Quantity', 'MinLevel',
+        'UnitCost', 'SellingPrice', 'Supplier', 'LastMovement'
+      ];
+
+      // Prepare data with core fields only (no calculated fields)
       const rows = inventory.map(item => {
-        const calculated = this.calculateDerivedFields(item);
         return [
-          calculated.id,
-          calculated.name,
-          calculated.sku,
-          calculated.category,
-          calculated.brand,
-          calculated.quantity,
-          calculated.minLevel,
-          calculated.unitCost,
-          calculated.sellingPrice,
-          calculated.profit,
-          calculated.stockValue,
-          calculated.lowStockFlag,
-          calculated.supplier,
-          calculated.lastMovement,
+          item.id || '',
+          item.name || '',
+          item.sku || '',
+          item.category || '',
+          item.brand || '',
+          item.quantity || 0,
+          item.minLevel || 10,
+          item.unitCost || 0,
+          item.sellingPrice || 0,
+          item.supplier || '',
+          item.lastMovement || '',
         ];
       });
 
-      // Clear existing data (except headers) and write new data
-      const clearRange = 'Inventory!A2:Z1000'; // Adjust range as needed
+      // Write headers and data
+      const allData = [headers, ...rows];
+
+      // Clear entire sheet and write fresh data with headers
+      const clearRange = 'Inventory!A:Z';
       await this.sheets.spreadsheets.values.clear({
         spreadsheetId: this.spreadsheetId,
         range: clearRange,
       });
 
-      // Write updated data
-      const dataRange = 'Inventory!A2:Z';
+      // Write updated data with headers
+      const dataRange = 'Inventory!A1:Z';
       await this.sheets.spreadsheets.values.update({
         spreadsheetId: this.spreadsheetId,
         range: dataRange,
         valueInputOption: 'RAW',
         resource: {
-          values: rows,
+          values: allData,
         },
       });
 
