@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { InventoryItem } from '../types';
 import { getDemandPrediction } from '../services/geminiService';
-import { AlertTriangle, Package, Zap, Upload, Download, Search, Filter, Edit3, Plus, Minus, ShoppingCart } from 'lucide-react';
+import { AlertTriangle, Package, Zap, Upload, Download, Search, Filter, Plus, Minus, ShoppingCart, RefreshCw, Cloud } from 'lucide-react';
 import { readExcel, writeExcel } from '../services/excelService';
+import inventoryApiService from '../services/api/inventoryApi';
 
 interface WarehouseModuleProps {
   inventory: InventoryItem[];
@@ -12,10 +13,35 @@ interface WarehouseModuleProps {
 const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventoryChange}) => {
   const [prediction, setPrediction] = useState<string>('Analyzing demand patterns...');
   const [loading, setLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('All');
   const [filterStatus, setFilterStatus] = useState('All');
   const [sortBy, setSortBy] = useState('name');
+
+  // Fetch inventory from Google Sheets
+  const fetchInventoryFromSheets = useCallback(async () => {
+    try {
+      setSyncing(true);
+      setSyncStatus('syncing');
+      const data = await inventoryApiService.getInventory();
+      onInventoryChange(data);
+      setSyncStatus('success');
+      setTimeout(() => setSyncStatus('idle'), 2000);
+    } catch (error) {
+      console.error('Failed to fetch inventory:', error);
+      setSyncStatus('error');
+      setTimeout(() => setSyncStatus('idle'), 3000);
+    } finally {
+      setSyncing(false);
+    }
+  }, [onInventoryChange]);
+
+  // Fetch inventory on component mount
+  useEffect(() => {
+    fetchInventoryFromSheets();
+  }, [fetchInventoryFromSheets]);
 
   useEffect(() => {
     const fetchPrediction = async () => {
@@ -25,7 +51,7 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
         setLoading(false);
     };
     fetchPrediction();
-  }, []);
+  }, [inventory]);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -43,25 +69,43 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
   // Filtered and sorted inventory
   const filteredInventory = useMemo(() => {
     let filtered = inventory.filter(item => {
-      const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           item.sku.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesCategory = filterCategory === 'All' || item.category === filterCategory;
+      const name = item.name || '';
+      const sku = item.sku || '';
+      const category = item.category || 'Uncategorized';
+      const quantity = item.quantity || 0;
+      const minLevel = item.minLevel || 10;
+
+      const matchesSearch = name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           sku.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesCategory = filterCategory === 'All' || category === filterCategory;
       const matchesStatus = filterStatus === 'All' ||
-        (filterStatus === 'Critical' && item.quantity <= item.minLevel * 0.2) ||
-        (filterStatus === 'Low' && item.quantity <= item.minLevel && item.quantity > item.minLevel * 0.2) ||
-        (filterStatus === 'Healthy' && item.quantity > item.minLevel);
+        (filterStatus === 'Critical' && quantity <= minLevel * 0.2) ||
+        (filterStatus === 'Low' && quantity <= minLevel && quantity > minLevel * 0.2) ||
+        (filterStatus === 'Healthy' && quantity > minLevel);
 
       return matchesSearch && matchesCategory && matchesStatus;
     });
 
     // Sort inventory
     filtered.sort((a, b) => {
-      if (sortBy === 'name') return a.name.localeCompare(b.name);
-      if (sortBy === 'quantity') return b.quantity - a.quantity;
-      if (sortBy === 'category') return a.category.localeCompare(b.category);
+      if (sortBy === 'name') {
+        const aName = a.name || '';
+        const bName = b.name || '';
+        return aName.localeCompare(bName);
+      }
+      if (sortBy === 'quantity') return (b.quantity || 0) - (a.quantity || 0);
+      if (sortBy === 'category') {
+        const aCat = a.category || '';
+        const bCat = b.category || '';
+        return aCat.localeCompare(bCat);
+      }
       if (sortBy === 'status') {
-        const aStatus = a.quantity <= a.minLevel * 0.2 ? 0 : a.quantity <= a.minLevel ? 1 : 2;
-        const bStatus = b.quantity <= b.minLevel * 0.2 ? 0 : b.quantity <= b.minLevel ? 1 : 2;
+        const aQty = a.quantity || 0;
+        const aMin = a.minLevel || 10;
+        const bQty = b.quantity || 0;
+        const bMin = b.minLevel || 10;
+        const aStatus = aQty <= aMin * 0.2 ? 0 : aQty <= aMin ? 1 : 2;
+        const bStatus = bQty <= bMin * 0.2 ? 0 : bQty <= bMin ? 1 : 2;
         return aStatus - bStatus;
       }
       return 0;
@@ -70,20 +114,39 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
     return filtered;
   }, [inventory, searchTerm, filterCategory, filterStatus, sortBy]);
 
-  // Quick quantity adjustments
-  const adjustQuantity = (itemId: string, adjustment: number) => {
-    const updatedInventory = inventory.map(item => {
-      if (item.id === itemId) {
-        const newQuantity = Math.max(0, item.quantity + adjustment);
-        return {
-          ...item,
-          quantity: newQuantity,
-          lastMovement: new Date().toISOString().split('T')[0]
-        };
-      }
-      return item;
-    });
-    onInventoryChange(updatedInventory);
+  // Quick quantity adjustments with real-time sync to Google Sheets
+  const adjustQuantity = async (itemId: string, adjustment: number) => {
+    try {
+      // Update locally first for immediate feedback
+      const updatedInventory = inventory.map(item => {
+        if (item.id === itemId) {
+          const newQuantity = Math.max(0, item.quantity + adjustment);
+          return {
+            ...item,
+            quantity: newQuantity,
+            lastMovement: new Date().toISOString().split('T')[0]
+          };
+        }
+        return item;
+      });
+      onInventoryChange(updatedInventory);
+
+      // Sync to Google Sheets
+      setSyncing(true);
+      setSyncStatus('syncing');
+      await inventoryApiService.adjustQuantity(itemId, adjustment);
+      setSyncStatus('success');
+      setTimeout(() => setSyncStatus('idle'), 2000);
+      setSyncing(false);
+    } catch (error) {
+      console.error('Failed to update quantity:', error);
+      setSyncStatus('error');
+      setTimeout(() => setSyncStatus('idle'), 3000);
+      setSyncing(false);
+
+      // Re-fetch to get correct state
+      await fetchInventoryFromSheets();
+    }
   };
 
   const handleExport = () => {
@@ -92,7 +155,40 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
 
   return (
     <div className="space-y-6">
-        <h2 className="text-2xl font-bold text-slate-800">Warehouse & Inventory</h2>
+        <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-bold text-slate-800">Warehouse & Inventory</h2>
+
+            {/* Google Sheets Sync Status */}
+            <div className="flex items-center space-x-2">
+                {syncStatus === 'syncing' && (
+                    <div className="flex items-center text-blue-600 text-sm">
+                        <RefreshCw className="w-4 h-4 mr-1 animate-spin" />
+                        Syncing to Google Sheets...
+                    </div>
+                )}
+                {syncStatus === 'success' && (
+                    <div className="flex items-center text-green-600 text-sm">
+                        <Cloud className="w-4 h-4 mr-1" />
+                        Synced successfully
+                    </div>
+                )}
+                {syncStatus === 'error' && (
+                    <div className="flex items-center text-red-600 text-sm">
+                        <Cloud className="w-4 h-4 mr-1" />
+                        Sync failed
+                    </div>
+                )}
+                <button
+                    onClick={fetchInventoryFromSheets}
+                    disabled={syncing}
+                    className="flex items-center px-3 py-2 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg border border-slate-300 transition-colors"
+                    title="Refresh from Google Sheets"
+                >
+                    <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
+                    Refresh
+                </button>
+            </div>
+        </div>
 
         {/* AI Prediction Card */}
         <div className="bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-200 rounded-xl p-6 shadow-sm">

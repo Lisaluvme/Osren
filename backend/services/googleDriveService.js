@@ -2,21 +2,74 @@ const { google } = require('googleapis');
 
 class GoogleSheetsService {
   constructor() {
-    this.auth = new google.auth.GoogleAuth({
-      credentials: {
-        client_email: process.env.GOOGLE_CLIENT_EMAIL,
-        private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-      },
-      scopes: [
-        'https://www.googleapis.com/auth/spreadsheets',
-        'https://www.googleapis.com/auth/drive'
-      ],
-    });
+    // Check if we should even try to initialize Google Sheets
+    // Don't initialize if USE_MOCK_DATA is true
+    this.enabled = !(
+      process.env.USE_MOCK_DATA === 'true'
+    );
 
-    this.sheets = google.sheets({ version: 'v4', auth: this.auth });
-    this.drive = google.drive({ version: 'v3', auth: this.auth });
-    this.spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;
-    this.range = 'Inventory!A:Z'; // Adjust range as needed
+    // Try to use GOOGLE_APPLICATION_CREDENTIALS environment variable first
+    // Otherwise fall back to individual environment variables
+    const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+
+    this.enabled = this.enabled && !!(
+      credentialsPath ||
+      (process.env.GOOGLE_CLIENT_EMAIL && process.env.GOOGLE_PRIVATE_KEY)
+    );
+
+    if (this.enabled) {
+      try {
+        if (credentialsPath) {
+          // Use credentials file (more compatible with Node.js v22)
+          console.log('Using credentials file:', credentialsPath);
+          this.auth = new google.auth.GoogleAuth({
+            keyFile: credentialsPath,
+            scopes: [
+              'https://www.googleapis.com/auth/spreadsheets',
+              'https://www.googleapis.com/auth/drive'
+            ],
+          });
+        } else {
+          // Fallback to environment variables
+          console.log('Using environment variables for credentials');
+
+          // Handle different private key formats
+          let privateKey = process.env.GOOGLE_PRIVATE_KEY;
+
+          // Remove quotes if present
+          if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
+            privateKey = privateKey.slice(1, -1);
+          }
+
+          // Convert literal \n to actual newlines
+          privateKey = privateKey.replace(/\\n/g, '\n');
+
+          console.log('Private key loaded, length:', privateKey.length);
+          console.log('First 50 chars:', privateKey.substring(0, 50));
+
+          this.auth = new google.auth.GoogleAuth({
+            credentials: {
+              client_email: process.env.GOOGLE_CLIENT_EMAIL,
+              private_key: privateKey,
+            },
+            scopes: [
+              'https://www.googleapis.com/auth/spreadsheets',
+              'https://www.googleapis.com/auth/drive'
+            ],
+          });
+        }
+
+        this.sheets = google.sheets({ version: 'v4', auth: this.auth });
+        this.drive = google.drive({ version: 'v3', auth: this.auth });
+        this.spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;
+        this.range = 'Inventory!A:Z'; // Adjust range as needed
+      } catch (error) {
+        console.error('Failed to initialize GoogleSheetsService:', error.message);
+        this.enabled = false;
+      }
+    } else {
+      console.log('Google Sheets service disabled (Mock data mode enabled)');
+    }
   }
 
   // Calculate derived fields

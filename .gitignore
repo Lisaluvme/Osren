@@ -18,6 +18,10 @@ dist-ssr
 .env.production
 backend/.env
 
+# Google credentials
+backend/google-credentials.json
+google-credentials.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
