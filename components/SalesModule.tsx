@@ -1,11 +1,30 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { InventoryItem } from '../types';
 import { getSalesForecast, SalesRecommendation } from '../services/geminiService';
-import { ShoppingCart, Sparkles, Plus, TrendingUp, Map, PieChart as PieChartIcon, Calendar } from 'lucide-react';
+import { ShoppingCart, Sparkles, Plus, TrendingUp, Map, PieChart as PieChartIcon, Calendar, Package, User, Phone, MapPin, FileText } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, PieChart, Pie, Cell, Legend
 } from 'recharts';
+
+// Order interface
+interface Order {
+  id: string;
+  clientName: string;
+  items: Array<{
+    name: string;
+    quantity: number;
+    unitPrice: number;
+    itemTotal: number;
+  }>;
+  totalItems: number;
+  totalAmount: number;
+  status: string;
+  createdAt: string;
+  deliveryAddress?: string;
+  contactNumber?: string;
+  notes?: string;
+}
 
 // --- Mock Data for Analytics ---
 const REGIONAL_SALES = [
@@ -42,6 +61,38 @@ const SalesModule = ({inventory}: {inventory: InventoryItem[]}) => {
   const [orderLoading, setOrderLoading] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [orderError, setOrderError] = useState('');
+  const [showOrderForm, setShowOrderForm] = useState(false);
+
+  // Order form state
+  const [orderFormData, setOrderFormData] = useState({
+    deliveryAddress: '',
+    contactNumber: '',
+    notes: ''
+  });
+
+  const [recentOrders, setRecentOrders] = useState<Order[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+
+  // Fetch recent orders on component mount
+  useEffect(() => {
+    fetchRecentOrders();
+  }, []);
+
+  const fetchRecentOrders = async () => {
+    setOrdersLoading(true);
+    try {
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+      const response = await fetch(`${API_BASE}/orders?limit=5`);
+      const data = await response.json();
+      if (data.success) {
+        setRecentOrders(data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+    } finally {
+      setOrdersLoading(false);
+    }
+  };
 
   const handleForecast = async () => {
     setLoading(true);
@@ -78,31 +129,59 @@ const SalesModule = ({inventory}: {inventory: InventoryItem[]}) => {
         return;
     }
 
+    // Show order form if not shown yet
+    if (!showOrderForm) {
+        setShowOrderForm(true);
+        return;
+    }
+
     setOrderLoading(true);
     setOrderError('');
 
     try {
-        // Calculate total items
-        const totalItems = cart.reduce((sum, item) => sum + item.qty, 0);
+        const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
-        // Simulate order processing (you can replace this with actual API call)
-        await new Promise(resolve => setTimeout(resolve, 1500));
-
-        console.log('Order placed:', {
-            client: clientName,
-            items: cart,
-            totalItems,
-            timestamp: new Date().toISOString()
+        const response = await fetch(`${API_BASE}/orders`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                clientName,
+                items: cart.map(item => ({
+                    name: item.name,
+                    quantity: item.qty
+                })),
+                deliveryAddress: orderFormData.deliveryAddress,
+                contactNumber: orderFormData.contactNumber,
+                notes: orderFormData.notes
+            })
         });
 
-        // Show success message
-        setOrderSuccess(true);
+        const data = await response.json();
 
-        // Clear cart after successful order
-        setTimeout(() => {
-            setCart([]);
-            setOrderSuccess(false);
-        }, 2000);
+        if (data.success) {
+            // Show success message
+            setOrderSuccess(true);
+
+            // Refresh recent orders
+            await fetchRecentOrders();
+
+            // Clear cart and form after successful order
+            setTimeout(() => {
+                setCart([]);
+                setOrderSuccess(false);
+                setShowOrderForm(false);
+                setOrderFormData({
+                    deliveryAddress: '',
+                    contactNumber: '',
+                    notes: ''
+                });
+            }, 2000);
+        } else {
+            setOrderError(data.error || 'Failed to place order. Please try again.');
+            setTimeout(() => setOrderError(''), 3000);
+        }
 
     } catch (error) {
         console.error('Order placement failed:', error);
@@ -111,6 +190,14 @@ const SalesModule = ({inventory}: {inventory: InventoryItem[]}) => {
     } finally {
         setOrderLoading(false);
     }
+  };
+
+  const getOrderTotal = () => {
+      return cart.reduce((total, item) => {
+          const inventoryItem = inventory.find(inv => inv.name === item.name);
+          const price = inventoryItem ? inventoryItem.sellingPrice : 0;
+          return total + (price * item.qty);
+      }, 0);
   };
 
   return (
@@ -278,84 +365,214 @@ const SalesModule = ({inventory}: {inventory: InventoryItem[]}) => {
                </div>
            </div>
 
-           {/* Current Cart */}
+           {/* Current Cart & Order Form */}
            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col h-full">
                <h3 className="font-bold text-slate-800 mb-4 flex items-center">
                    <ShoppingCart className="w-5 h-5 mr-2" /> Current Order
                </h3>
+
+               {/* Cart Items */}
                <div className="flex-1 bg-slate-50 rounded-lg p-4 mb-4 overflow-y-auto min-h-[150px]">
                    {cart.length === 0 ? (
                        <div className="h-full flex flex-col items-center justify-center text-slate-400">
+                           <ShoppingCart className="w-8 h-8 mb-2 opacity-50"/>
                            <p className="text-xs">Cart is empty</p>
                        </div>
                    ) : (
                        <div className="space-y-3">
-                           {cart.map((item, idx) => (
-                               <div key={idx} className="flex justify-between text-sm items-center border-b border-slate-200 pb-2 last:border-0 last:pb-0">
-                                   <span className="text-slate-700 font-medium">{item.name}</span>
-                                   <div className="flex items-center gap-2">
-                                       <button
-                                           onClick={() => removeFromCart(item.name)}
-                                           className="text-slate-400 hover:text-red-500 transition-colors text-xs"
-                                       >
-                                           −
-                                       </button>
-                                       <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs font-bold">x{item.qty}</span>
-                                       <button
-                                           onClick={() => addToCart(item.name)}
-                                           className="text-slate-400 hover:text-green-500 transition-colors text-xs"
-                                       >
-                                           +
-                                       </button>
+                           {cart.map((item, idx) => {
+                               const inventoryItem = inventory.find(inv => inv.name === item.name);
+                               const price = inventoryItem ? inventoryItem.sellingPrice : 0;
+                               return (
+                                   <div key={idx} className="bg-white p-2 rounded border border-slate-100">
+                                       <div className="flex justify-between text-sm items-center mb-1">
+                                           <span className="text-slate-700 font-medium">{item.name}</span>
+                                           <span className="text-slate-900 font-bold">RM{(price * item.qty).toFixed(2)}</span>
+                                       </div>
+                                       <div className="flex justify-between items-center">
+                                           <span className="text-xs text-slate-400">RM{price.toFixed(2)} each</span>
+                                           <div className="flex items-center gap-2">
+                                               <button
+                                                   onClick={() => removeFromCart(item.name)}
+                                                   className="text-slate-400 hover:text-red-500 transition-colors text-xs w-6 h-6 rounded flex items-center justify-center"
+                                               >
+                                                   −
+                                               </button>
+                                               <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs font-bold">x{item.qty}</span>
+                                               <button
+                                                   onClick={() => addToCart(item.name)}
+                                                   className="text-slate-400 hover:text-green-500 transition-colors text-xs w-6 h-6 rounded flex items-center justify-center"
+                                               >
+                                                   +
+                                               </button>
+                                           </div>
+                                       </div>
                                    </div>
-                               </div>
-                           ))}
+                               );
+                           })}
                        </div>
                    )}
                </div>
-               <div className="border-t border-slate-100 pt-4">
-                   <div className="flex justify-between text-sm font-bold text-slate-800 mb-4">
-                       <span>Total Items</span>
-                       <span>{cart.reduce((a, b) => a + b.qty, 0)}</span>
+
+               {/* Order Summary */}
+               {cart.length > 0 && (
+                   <div className="bg-slate-50 rounded-lg p-4 mb-4">
+                       <div className="flex justify-between text-sm text-slate-600 mb-2">
+                           <span>Total Items</span>
+                           <span className="font-medium">{cart.reduce((a, b) => a + b.qty, 0)}</span>
+                       </div>
+                       <div className="flex justify-between text-sm font-bold text-slate-900">
+                           <span>Order Total</span>
+                           <span>RM{getOrderTotal().toFixed(2)}</span>
+                       </div>
                    </div>
+               )}
 
-                   {/* Error Message */}
-                   {orderError && (
-                       <div className="mb-3 bg-red-50 border border-red-200 text-red-600 px-3 py-2 rounded text-xs">
-                           {orderError}
+               {/* Order Form */}
+               {showOrderForm && (
+                   <div className="bg-blue-50 rounded-lg p-4 mb-4 border border-blue-100">
+                       <h4 className="font-semibold text-blue-900 mb-3 text-sm flex items-center">
+                           <FileText className="w-4 h-4 mr-2" /> Order Details
+                       </h4>
+                       <div className="space-y-3">
+                           <div>
+                               <label className="block text-xs font-medium text-slate-700 mb-1">Delivery Address</label>
+                               <input
+                                   type="text"
+                                   value={orderFormData.deliveryAddress}
+                                   onChange={(e) => setOrderFormData({...orderFormData, deliveryAddress: e.target.value})}
+                                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                   placeholder="Enter delivery address"
+                               />
+                           </div>
+                           <div>
+                               <label className="block text-xs font-medium text-slate-700 mb-1">Contact Number</label>
+                               <input
+                                   type="tel"
+                                   value={orderFormData.contactNumber}
+                                   onChange={(e) => setOrderFormData({...orderFormData, contactNumber: e.target.value})}
+                                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                   placeholder="Enter contact number"
+                               />
+                           </div>
+                           <div>
+                               <label className="block text-xs font-medium text-slate-700 mb-1">Notes (Optional)</label>
+                               <textarea
+                                   value={orderFormData.notes}
+                                   onChange={(e) => setOrderFormData({...orderFormData, notes: e.target.value})}
+                                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                   placeholder="Any special instructions..."
+                                   rows={2}
+                               />
+                           </div>
                        </div>
-                   )}
+                   </div>
+               )}
 
-                   {/* Success Message */}
-                   {orderSuccess && (
-                       <div className="mb-3 bg-green-50 border border-green-200 text-green-600 px-3 py-2 rounded text-xs flex items-center">
-                           <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                           </svg>
-                           Order placed successfully!
-                       </div>
-                   )}
+               {/* Error Message */}
+               {orderError && (
+                   <div className="mb-3 bg-red-50 border border-red-200 text-red-600 px-3 py-2 rounded text-xs">
+                       {orderError}
+                   </div>
+               )}
 
-                   <button
-                       onClick={handlePlaceOrder}
-                       disabled={orderLoading || cart.length === 0}
-                       className={`w-full py-3 rounded-lg font-medium shadow-lg shadow-slate-200 transition-transform active:scale-[0.98] ${
-                           orderLoading || cart.length === 0
-                               ? 'bg-slate-400 text-slate-200 cursor-not-allowed'
-                               : 'bg-slate-900 text-white hover:bg-slate-800'
-                       }`}
-                   >
-                       {orderLoading ? (
-                           <span className="flex items-center justify-center">
-                               <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"/>
-                               Processing...
-                           </span>
-                       ) : (
-                           'Place Order'
-                       )}
-                   </button>
-               </div>
+               {/* Success Message */}
+               {orderSuccess && (
+                   <div className="mb-3 bg-green-50 border border-green-200 text-green-600 px-3 py-2 rounded text-xs flex items-center">
+                       <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                           <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                       </svg>
+                       Order placed successfully!
+                   </div>
+               )}
+
+               <button
+                   onClick={handlePlaceOrder}
+                   disabled={orderLoading || cart.length === 0}
+                   className={`w-full py-3 rounded-lg font-medium shadow-lg shadow-slate-200 transition-transform active:scale-[0.98] ${
+                       orderLoading || cart.length === 0
+                           ? 'bg-slate-400 text-slate-200 cursor-not-allowed'
+                           : 'bg-slate-900 text-white hover:bg-slate-800'
+                   }`}
+               >
+                   {orderLoading ? (
+                       <span className="flex items-center justify-center">
+                           <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"/>
+                           Processing...
+                       </span>
+                   ) : showOrderForm ? (
+                       'Confirm Order'
+                   ) : (
+                       'Place Order'
+                   )}
+               </button>
            </div>
+       </section>
+
+       {/* Recent Orders Section */}
+       <section className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+           <div className="flex items-center justify-between mb-4">
+               <h3 className="font-bold text-slate-800 flex items-center">
+                   <Package className="w-5 h-5 mr-2" /> Recent Orders
+               </h3>
+               <button
+                   onClick={fetchRecentOrders}
+                   className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+               >
+                   Refresh
+               </button>
+           </div>
+
+           {ordersLoading ? (
+               <div className="text-center py-8 text-slate-400">
+                   <div className="w-8 h-8 border-2 border-slate-300 border-t-blue-600 rounded-full animate-spin mx-auto mb-2"/>
+                   <p className="text-sm">Loading orders...</p>
+               </div>
+           ) : recentOrders.length === 0 ? (
+               <div className="text-center py-8 text-slate-400">
+                   <Package className="w-12 h-12 mx-auto mb-2 opacity-50"/>
+                   <p className="text-sm">No orders yet. Place your first order above!</p>
+               </div>
+           ) : (
+               <div className="space-y-3">
+                   {recentOrders.map((order) => (
+                       <div key={order.id} className="border border-slate-100 rounded-lg p-4 hover:shadow-md transition-shadow">
+                           <div className="flex justify-between items-start mb-2">
+                               <div>
+                                   <div className="flex items-center gap-2 mb-1">
+                                       <span className="font-semibold text-slate-800">{order.clientName}</span>
+                                       <span className={`text-xs px-2 py-0.5 rounded font-medium ${
+                                           order.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                                           order.status === 'completed' ? 'bg-green-100 text-green-700' :
+                                           'bg-red-100 text-red-700'
+                                       }`}>
+                                           {order.status}
+                                       </span>
+                                   </div>
+                                   <p className="text-xs text-slate-400">{new Date(order.createdAt).toLocaleString()}</p>
+                               </div>
+                               <div className="text-right">
+                                   <p className="font-bold text-slate-900">RM{order.totalAmount.toFixed(2)}</p>
+                                   <p className="text-xs text-slate-400">{order.totalItems} items</p>
+                               </div>
+                           </div>
+                           <div className="text-xs text-slate-500">
+                               {order.items.map((item, idx) => (
+                                   <span key={idx} className="inline-block mr-2">
+                                       {item.name} x{item.quantity}
+                                   </span>
+                               ))}
+                           </div>
+                           {order.deliveryAddress && (
+                               <div className="mt-2 text-xs text-slate-400 flex items-center">
+                                   <MapPin className="w-3 h-3 mr-1" />
+                                   {order.deliveryAddress}
+                               </div>
+                           )}
+                       </div>
+                   ))}
+               </div>
+           )}
        </section>
     </div>
   );

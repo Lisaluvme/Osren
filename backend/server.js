@@ -84,6 +84,13 @@ try {
   console.error('❌ Error loading audit routes:', error.message);
 }
 
+try {
+  app.use('/api/orders', require('./routes/orders'));
+  console.log('✅ Orders routes loaded');
+} catch (error) {
+  console.error('❌ Error loading orders routes:', error.message);
+}
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'OK', message: 'Server is running' });
