@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Layout from './components/Layout';
 import FinanceModule from './components/FinanceModule';
 import AccountsModule from './components/AccountsModule';
@@ -6,18 +6,73 @@ import DistributionModule from './components/DistributionModule';
 import WarehouseModule from './components/WarehouseModule';
 import SalesModule from './components/SalesModule';
 import DeliveryModule from './components/DeliveryModule';
-import { UserRole } from './types';
-import { MOCK_INVENTORY, InventoryItem } from './constants';
+import { UserRole, InventoryItem } from './types';
+import inventoryService from './services/inventoryService';
 
 const App: React.FC = () => {
   // State for global user context and navigation
   const [currentUserRole, setCurrentUserRole] = useState<UserRole>(UserRole.ADMIN);
-  const [activeModule, setActiveModule] = useState<string>('finance');
-  // Global inventory state
-  const [inventory, setInventory] = useState<InventoryItem[]>(MOCK_INVENTORY);
+  const [activeModule, setActiveModule] = useState<string>('warehouse'); // Start with warehouse to show real data
+  // Global inventory state - loads real data from Google Sheets
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [inventoryLoading, setInventoryLoading] = useState(true);
+  const [inventoryError, setInventoryError] = useState('');
+
+  // Load real inventory data on mount
+  useEffect(() => {
+    loadInventory();
+  }, []);
+
+  const loadInventory = async () => {
+    setInventoryLoading(true);
+    setInventoryError('');
+
+    try {
+      const realInventory = await inventoryService.getInventory();
+      setInventory(realInventory);
+    } catch (error) {
+      console.error('Failed to load inventory:', error);
+      setInventoryError('Failed to load inventory. Using cached data.');
+      // Keep existing inventory as fallback
+    } finally {
+      setInventoryLoading(false);
+    }
+  };
+
+  // Handle inventory updates from child components
+  const handleInventoryChange = (newInventory: InventoryItem[]) => {
+    setInventory(newInventory);
+  };
 
   // Route renderer
   const renderModule = () => {
+    if (inventoryLoading) {
+      return (
+        <div className="flex items-center justify-center h-full">
+          <div className="text-center">
+            <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"/>
+            <p className="text-slate-600">Loading real business data...</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (inventoryError) {
+      return (
+        <div className="flex items-center justify-center h-full">
+          <div className="text-center bg-red-50 p-6 rounded-lg border border-red-200">
+            <p className="text-red-600 mb-4">{inventoryError}</p>
+            <button
+              onClick={loadInventory}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+            >
+              Retry Loading Data
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     switch (activeModule) {
       case 'finance':
         return <FinanceModule currentRole={currentUserRole} />;
@@ -26,13 +81,13 @@ const App: React.FC = () => {
       case 'distribution':
         return <DistributionModule />;
       case 'warehouse':
-        return <WarehouseModule inventory={inventory} onInventoryChange={setInventory} />;
+        return <WarehouseModule inventory={inventory} onInventoryChange={handleInventoryChange} />;
       case 'sales':
         return <SalesModule inventory={inventory} />;
       case 'delivery':
         return <DeliveryModule />;
       default:
-        return <FinanceModule currentRole={currentUserRole} />;
+        return <WarehouseModule inventory={inventory} onInventoryChange={handleInventoryChange} />;
     }
   };
 

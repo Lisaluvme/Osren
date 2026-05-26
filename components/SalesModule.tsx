@@ -6,6 +6,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, PieChart, Pie, Cell, Legend
 } from 'recharts';
+import businessDataService from '../services/businessDataService';
 
 // Order interface
 interface Order {
@@ -26,30 +27,8 @@ interface Order {
   notes?: string;
 }
 
-// --- Mock Data for Analytics ---
-const REGIONAL_SALES = [
-  { region: '47500', sales: 12500, label: 'Subang' },
-  { region: '50480', sales: 18200, label: 'KL City' },
-  { region: '40150', sales: 9800, label: 'Shah Alam' },
-  { region: '68100', sales: 14500, label: 'Batu Caves' },
-  { region: '47100', sales: 11000, label: 'Puchong' },
-];
-
-const PRODUCT_MIX = [
-  { name: 'Cleaning', value: 45000 },
-  { name: 'Polishing', value: 25000 },
-  { name: 'Coating', value: 35000 },
-  { name: 'Access.', value: 15000 },
-];
-
-const SEASONAL_TRENDS = [
-  { month: 'Jan', sales: 42000 },
-  { month: 'Feb', sales: 48000 },
-  { month: 'Mar', sales: 55000 },
-  { month: 'Apr', sales: 51000 },
-  { month: 'May', sales: 62000 },
-  { month: 'Jun', sales: 68000 },
-];
+// --- Real Business Data Analytics ---
+const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b'];
 
 const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b'];
 
@@ -73,10 +52,52 @@ const SalesModule = ({inventory}: {inventory: InventoryItem[]}) => {
   const [recentOrders, setRecentOrders] = useState<Order[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
 
-  // Fetch recent orders on component mount
+  // Real business analytics data
+  const [regionalSales, setRegionalSales] = useState<any[]>([]);
+  const [productMix, setProductMix] = useState<any[]>([]);
+  const [seasonalTrends, setSeasonalTrends] = useState<any[]>([]);
+  const [analyticsLoading, setAnalyticsLoading] = useState(true);
+
+  // Fetch business data on component mount
   useEffect(() => {
     fetchRecentOrders();
+    loadBusinessAnalytics();
   }, []);
+
+  const loadBusinessAnalytics = async () => {
+    setAnalyticsLoading(true);
+    try {
+      // Fetch real analytics data
+      const [regionalData, productData] = await Promise.all([
+        businessDataService.getRegionalSales(),
+        businessDataService.getProductMix()
+      ]);
+
+      setRegionalSales(regionalData);
+      setProductMix(productData);
+
+      // Load seasonal trends from recent orders
+      const ordersResponse = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'}/orders?limit=100`);
+      const ordersData = await ordersResponse.json();
+
+      if (ordersData.success) {
+        const monthlyData = businessDataService.calculateMonthlySales(ordersData.data);
+        // Format for chart
+        setSeasonalTrends(monthlyData.slice(-6).map(item => ({
+          month: new Date(item.period + '-01').toLocaleString('default', { month: 'short' }),
+          sales: item.revenue
+        })));
+      }
+    } catch (error) {
+      console.error('Failed to load business analytics:', error);
+      // Use empty arrays as fallback
+      setRegionalSales([]);
+      setProductMix([]);
+      setSeasonalTrends([]);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  };
 
   const fetchRecentOrders = async () => {
     setOrdersLoading(true);
@@ -280,65 +301,99 @@ const SalesModule = ({inventory}: {inventory: InventoryItem[]}) => {
            {/* Regional Analysis */}
            <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
                <div className="flex items-center justify-between mb-4">
-                   <h3 className="font-bold text-slate-700 flex items-center"><Map className="w-4 h-4 mr-2" /> Sales by Postcode</h3>
+                   <h3 className="font-bold text-slate-700 flex items-center"><Map className="w-4 h-4 mr-2" /> Sales by Region</h3>
+                   <button onClick={loadBusinessAnalytics} className="text-blue-600 hover:text-blue-700 text-xs">Refresh</button>
                </div>
-               <div className="h-48 text-xs w-full">
-                   <ResponsiveContainer width="100%" height={192}>
-                       <BarChart data={REGIONAL_SALES} layout="vertical">
-                           <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
-                           <XAxis type="number" hide />
-                           <YAxis dataKey="label" type="category" width={70} tick={{fontSize: 10}} />
-                           <Tooltip cursor={{fill: '#f1f5f9'}} />
-                           <Bar dataKey="sales" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={15} />
-                       </BarChart>
-                   </ResponsiveContainer>
-               </div>
+               {analyticsLoading ? (
+                   <div className="h-48 flex items-center justify-center text-slate-400">
+                       <div className="w-6 h-6 border-2 border-slate-300 border-t-blue-600 rounded-full animate-spin mr-2"/>
+                       Loading...
+                   </div>
+               ) : regionalSales.length === 0 ? (
+                   <div className="h-48 flex items-center justify-center text-slate-400 text-sm">
+                       No sales data yet
+                   </div>
+               ) : (
+                   <div className="h-48 text-xs w-full">
+                       <ResponsiveContainer width="100%" height={192}>
+                           <BarChart data={regionalSales} layout="vertical">
+                               <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
+                               <XAxis type="number" hide />
+                               <YAxis dataKey="region" type="category" width={70} tick={{fontSize: 10}} />
+                               <Tooltip cursor={{fill: '#f1f5f9'}} />
+                               <Bar dataKey="sales" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={15} />
+                           </BarChart>
+                       </ResponsiveContainer>
+                   </div>
+               )}
            </div>
 
            {/* Product Mix */}
            <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
                <div className="flex items-center justify-between mb-4">
-                   <h3 className="font-bold text-slate-700 flex items-center"><PieChartIcon className="w-4 h-4 mr-2" /> Product Lines</h3>
+                   <h3 className="font-bold text-slate-700 flex items-center"><PieChartIcon className="w-4 h-4 mr-2" /> Product Categories</h3>
                </div>
-               <div className="h-48 text-xs w-full">
-                   <ResponsiveContainer width="100%" height={192}>
-                       <PieChart>
-                           <Pie
-                               data={PRODUCT_MIX}
-                               cx="50%"
-                               cy="50%"
-                               innerRadius={40}
-                               outerRadius={70}
-                               paddingAngle={5}
-                               dataKey="value"
-                           >
-                               {PRODUCT_MIX.map((entry, index) => (
-                                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                               ))}
-                           </Pie>
-                           <Tooltip />
-                           <Legend layout="vertical" verticalAlign="middle" align="right" iconSize={8} />
-                       </PieChart>
-                   </ResponsiveContainer>
-               </div>
+               {analyticsLoading ? (
+                   <div className="h-48 flex items-center justify-center text-slate-400">
+                       <div className="w-6 h-6 border-2 border-slate-300 border-t-blue-600 rounded-full animate-spin mr-2"/>
+                       Loading...
+                   </div>
+               ) : productMix.length === 0 ? (
+                   <div className="h-48 flex items-center justify-center text-slate-400 text-sm">
+                       No product data yet
+                   </div>
+               ) : (
+                   <div className="h-48 text-xs w-full">
+                       <ResponsiveContainer width="100%" height={192}>
+                           <PieChart>
+                               <Pie
+                                   data={productMix}
+                                   cx="50%"
+                                   cy="50%"
+                                   innerRadius={40}
+                                   outerRadius={70}
+                                   paddingAngle={5}
+                                   dataKey="value"
+                               >
+                                   {productMix.map((entry, index) => (
+                                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                   ))}
+                               </Pie>
+                               <Tooltip />
+                               <Legend layout="vertical" verticalAlign="middle" align="right" iconSize={8} />
+                           </PieChart>
+                       </ResponsiveContainer>
+                   </div>
+               )}
            </div>
 
-           {/* Seasonal Trends */}
+           {/* Sales Trends */}
            <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
                <div className="flex items-center justify-between mb-4">
-                   <h3 className="font-bold text-slate-700 flex items-center"><Calendar className="w-4 h-4 mr-2" /> Seasonal Peaks</h3>
+                   <h3 className="font-bold text-slate-700 flex items-center"><Calendar className="w-4 h-4 mr-2" /> Revenue Trends</h3>
                </div>
-               <div className="h-48 text-xs w-full">
-                   <ResponsiveContainer width="100%" height={192}>
-                       <LineChart data={SEASONAL_TRENDS}>
-                           <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                           <XAxis dataKey="month" tick={{fontSize: 10}} />
-                           <YAxis hide />
-                           <Tooltip />
-                           <Line type="monotone" dataKey="sales" stroke="#10b981" strokeWidth={2} dot={{r: 3}} activeDot={{r: 5}} />
-                       </LineChart>
-                   </ResponsiveContainer>
-               </div>
+               {analyticsLoading ? (
+                   <div className="h-48 flex items-center justify-center text-slate-400">
+                       <div className="w-6 h-6 border-2 border-slate-300 border-t-blue-600 rounded-full animate-spin mr-2"/>
+                       Loading...
+                   </div>
+               ) : seasonalTrends.length === 0 ? (
+                   <div className="h-48 flex items-center justify-center text-slate-400 text-sm">
+                       No trends data yet
+                   </div>
+               ) : (
+                   <div className="h-48 text-xs w-full">
+                       <ResponsiveContainer width="100%" height={192}>
+                           <LineChart data={seasonalTrends}>
+                               <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                               <XAxis dataKey="month" tick={{fontSize: 10}} />
+                               <YAxis hide />
+                               <Tooltip />
+                               <Line type="monotone" dataKey="sales" stroke="#10b981" strokeWidth={2} dot={{r: 3}} activeDot={{r: 5}} />
+                           </LineChart>
+                       </ResponsiveContainer>
+                   </div>
+               )}
            </div>
        </section>
 
