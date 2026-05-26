@@ -30,8 +30,6 @@ interface Order {
 // --- Real Business Data Analytics ---
 const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b'];
 
-const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b'];
-
 const SalesModule = ({inventory}: {inventory: InventoryItem[]}) => {
   const [clientName, setClientName] = useState('AutoSpa Elite');
   const [recommendations, setRecommendations] = useState<SalesRecommendation[]>([]);
