@@ -84,26 +84,6 @@ try {
   console.error('❌ Error loading audit routes:', error.message);
 }
 
-const app = express();
-const PORT = process.env.PORT || 5000;
-
-// Middleware
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// Routes
-app.use('/api/inventory', inventoryRoutes);
-app.use('/api/calendar', calendarRoutes);
-app.use('/api/drive', driveRoutes);
-app.use('/api/maps', mapsRoutes);
-app.use('/api/payment', paymentRoutes);
-app.use('/api/auth', authRoutes);
-app.use('/api/auth', oauthRoutes); // OAuth routes for Google Sheets
-app.use('/api/documents', documentRoutes);
-app.use('/api/notifications', notificationRoutes);
-app.use('/api/audit', auditRoutes);
-
 // Health check
 app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'OK', message: 'Server is running' });
