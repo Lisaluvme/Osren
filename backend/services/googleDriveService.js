@@ -1,5 +1,8 @@
 const { google } = require('googleapis');
 
+// Configure SSL for Google APIs
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
 class GoogleSheetsService {
   constructor() {
     // Check if we should even try to initialize Google Sheets
@@ -36,6 +39,10 @@ class GoogleSheetsService {
           // Handle different private key formats
           let privateKey = process.env.GOOGLE_PRIVATE_KEY;
 
+          if (!privateKey) {
+            throw new Error('GOOGLE_PRIVATE_KEY is not set');
+          }
+
           // Remove quotes if present
           if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
             privateKey = privateKey.slice(1, -1);
@@ -46,6 +53,11 @@ class GoogleSheetsService {
 
           console.log('Private key loaded, length:', privateKey.length);
           console.log('First 50 chars:', privateKey.substring(0, 50));
+
+          // Validate private key format
+          if (!privateKey.includes('BEGIN PRIVATE KEY') || !privateKey.includes('END PRIVATE KEY')) {
+            throw new Error('Invalid private key format');
+          }
 
           this.auth = new google.auth.GoogleAuth({
             credentials: {
@@ -59,12 +71,23 @@ class GoogleSheetsService {
           });
         }
 
-        this.sheets = google.sheets({ version: 'v4', auth: this.auth });
+        this.sheets = google.sheets({
+          version: 'v4',
+          auth: this.auth,
+          httpOptions: {
+            headers: {
+              'User-Agent': 'osren-inventory-manager/1.0'
+            }
+          }
+        });
         this.drive = google.drive({ version: 'v3', auth: this.auth });
         this.spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;
         this.range = 'Inventory!A:Z'; // Adjust range as needed
+
+        console.log('Google Sheets service initialized successfully');
       } catch (error) {
         console.error('Failed to initialize GoogleSheetsService:', error.message);
+        console.error('Full error details:', error);
         this.enabled = false;
       }
     } else {
