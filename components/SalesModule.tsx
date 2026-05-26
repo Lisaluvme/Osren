@@ -39,6 +39,9 @@ const SalesModule = ({inventory}: {inventory: InventoryItem[]}) => {
   const [recommendations, setRecommendations] = useState<SalesRecommendation[]>([]);
   const [loading, setLoading] = useState(false);
   const [cart, setCart] = useState<{name: string, qty: number}[]>([]);
+  const [orderLoading, setOrderLoading] = useState(false);
+  const [orderSuccess, setOrderSuccess] = useState(false);
+  const [orderError, setOrderError] = useState('');
 
   const handleForecast = async () => {
     setLoading(true);
@@ -56,6 +59,58 @@ const SalesModule = ({inventory}: {inventory: InventoryItem[]}) => {
           }
           return [...prev, { name, qty: 1}];
       });
+  };
+
+  const removeFromCart = (name: string) => {
+      setCart(prev => {
+          const existing = prev.find(i => i.name === name);
+          if (existing && existing.qty > 1) {
+              return prev.map(i => i.name === name ? { ...i, qty: i.qty - 1} : i);
+          }
+          return prev.filter(i => i.name !== name);
+      });
+  };
+
+  const handlePlaceOrder = async () => {
+    if (cart.length === 0) {
+        setOrderError('Cart is empty. Please add items to your order.');
+        setTimeout(() => setOrderError(''), 3000);
+        return;
+    }
+
+    setOrderLoading(true);
+    setOrderError('');
+
+    try {
+        // Calculate total items
+        const totalItems = cart.reduce((sum, item) => sum + item.qty, 0);
+
+        // Simulate order processing (you can replace this with actual API call)
+        await new Promise(resolve => setTimeout(resolve, 1500));
+
+        console.log('Order placed:', {
+            client: clientName,
+            items: cart,
+            totalItems,
+            timestamp: new Date().toISOString()
+        });
+
+        // Show success message
+        setOrderSuccess(true);
+
+        // Clear cart after successful order
+        setTimeout(() => {
+            setCart([]);
+            setOrderSuccess(false);
+        }, 2000);
+
+    } catch (error) {
+        console.error('Order placement failed:', error);
+        setOrderError('Failed to place order. Please try again.');
+        setTimeout(() => setOrderError(''), 3000);
+    } finally {
+        setOrderLoading(false);
+    }
   };
 
   return (
@@ -238,7 +293,21 @@ const SalesModule = ({inventory}: {inventory: InventoryItem[]}) => {
                            {cart.map((item, idx) => (
                                <div key={idx} className="flex justify-between text-sm items-center border-b border-slate-200 pb-2 last:border-0 last:pb-0">
                                    <span className="text-slate-700 font-medium">{item.name}</span>
-                                   <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs font-bold">x{item.qty}</span>
+                                   <div className="flex items-center gap-2">
+                                       <button
+                                           onClick={() => removeFromCart(item.name)}
+                                           className="text-slate-400 hover:text-red-500 transition-colors text-xs"
+                                       >
+                                           −
+                                       </button>
+                                       <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs font-bold">x{item.qty}</span>
+                                       <button
+                                           onClick={() => addToCart(item.name)}
+                                           className="text-slate-400 hover:text-green-500 transition-colors text-xs"
+                                       >
+                                           +
+                                       </button>
+                                   </div>
                                </div>
                            ))}
                        </div>
@@ -249,8 +318,41 @@ const SalesModule = ({inventory}: {inventory: InventoryItem[]}) => {
                        <span>Total Items</span>
                        <span>{cart.reduce((a, b) => a + b.qty, 0)}</span>
                    </div>
-                   <button className="w-full py-3 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 shadow-lg shadow-slate-200 transition-transform active:scale-[0.98]">
-                       Place Order
+
+                   {/* Error Message */}
+                   {orderError && (
+                       <div className="mb-3 bg-red-50 border border-red-200 text-red-600 px-3 py-2 rounded text-xs">
+                           {orderError}
+                       </div>
+                   )}
+
+                   {/* Success Message */}
+                   {orderSuccess && (
+                       <div className="mb-3 bg-green-50 border border-green-200 text-green-600 px-3 py-2 rounded text-xs flex items-center">
+                           <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                           </svg>
+                           Order placed successfully!
+                       </div>
+                   )}
+
+                   <button
+                       onClick={handlePlaceOrder}
+                       disabled={orderLoading || cart.length === 0}
+                       className={`w-full py-3 rounded-lg font-medium shadow-lg shadow-slate-200 transition-transform active:scale-[0.98] ${
+                           orderLoading || cart.length === 0
+                               ? 'bg-slate-400 text-slate-200 cursor-not-allowed'
+                               : 'bg-slate-900 text-white hover:bg-slate-800'
+                       }`}
+                   >
+                       {orderLoading ? (
+                           <span className="flex items-center justify-center">
+                               <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"/>
+                               Processing...
+                           </span>
+                       ) : (
+                           'Place Order'
+                       )}
                    </button>
                </div>
            </div>
