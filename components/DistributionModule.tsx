@@ -79,6 +79,17 @@ const DistributionModule: React.FC<DistributionModuleProps> = ({newOrder}) => {
     }
   };
 
+  // Map DistributionModule status to backend status
+  const mapStatusToBackend = (frontendStatus: SalesOrder['status']): string => {
+    switch (frontendStatus) {
+      case 'SO': return 'pending';
+      case 'DO': return 'processing';
+      case 'Invoiced': return 'invoiced';
+      case 'Delivered': return 'delivered';
+      default: return 'pending';
+    }
+  };
+
   const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -129,12 +140,15 @@ const DistributionModule: React.FC<DistributionModuleProps> = ({newOrder}) => {
 
          try {
            const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
-           console.log('🔄 Updating order status to Invoiced with signature:', signingOrder);
+           const backendStatus = mapStatusToBackend('Invoiced');
+
+           console.log('🔄 [Save Signature] Updating order status to Invoiced:', signingOrder);
+           console.log('🔄 Frontend: DO → Backend:', backendStatus, '→ Frontend: Invoiced');
 
            const response = await fetch(`${API_BASE}/orders/${signingOrder}`, {
              method: 'PATCH',
              headers: { 'Content-Type': 'application/json' },
-             body: JSON.stringify({ status: 'Invoiced', signature: dataUrl })
+             body: JSON.stringify({ status: backendStatus, signature: dataUrl })
            });
 
            const data = await response.json();
@@ -160,29 +174,41 @@ const DistributionModule: React.FC<DistributionModuleProps> = ({newOrder}) => {
           // Update to DO status
           try {
             const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
-            console.log('🔄 Updating order status to DO:', id);
+            const backendStatus = mapStatusToBackend('DO');
+
+            console.log('🔄 [Convert to DO] Updating order status:', id);
+            console.log('🔄 Frontend: SO → Backend:', backendStatus, '→ Frontend: DO');
+            console.log('🌍 Using API base:', API_BASE);
 
             const response = await fetch(`${API_BASE}/orders/${id}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ status: 'DO' })
+              body: JSON.stringify({ status: backendStatus })
             });
+
+            console.log('📡 Response status:', response.status);
+
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
 
             const data = await response.json();
             console.log('✅ Status update response:', data);
 
             if (data.success) {
               // Update local state
+              console.log('🎯 Updating local state for order:', id, '→ DO');
               setOrders(prev => prev.map(o => o.id === id ? { ...o, status: 'DO' } : o));
             } else {
               console.error('❌ Failed to update status:', data.error);
-              alert('Failed to update status. Please try again.');
+              alert(`Failed to update status: ${data.error}`);
             }
           } catch (error) {
             console.error('❌ Error updating status:', error);
-            alert('Failed to update status. Please try again.');
+            alert(`Failed to update status: ${error.message}`);
           }
       } else if (currentStatus === 'DO') {
+          console.log('🖊️ Opening signature modal for order:', id);
           setSigningOrder(id);
           // Wait for render then clear if needed
           setTimeout(() => clearSignature(), 100);
