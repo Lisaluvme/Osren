@@ -248,8 +248,9 @@ const FinanceModule: React.FC<FinanceModuleProps> = ({ currentRole }) => {
                                 {chartData.map((entry, index) => (
                                     <Cell key={`cell-${index}`} fill={entry.color} />
                                 ))}
-                            </BarChart>
-                        </ResponsiveContainer>
+                            </Bar>
+                        </BarChart>
+                    </ResponsiveContainer>
                     </div>
             </div>
             </div>
