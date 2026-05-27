@@ -14,14 +14,26 @@ console.log('🔧 Order routes using:', useMockData ? 'Mock Data Service (Local 
 console.log('🔧 Google Sheets enabled:', googleSheetsService.enabled);
 
 // Health check for orders service
-router.get('/health', (req, res) => {
-  res.status(200).json({
-    success: true,
-    service: 'orders',
-    googleSheetsEnabled: googleSheetsService.enabled,
-    inMemoryOrdersCount: orders.length,
-    status: 'operational'
-  });
+router.get('/health', async (req, res) => {
+  try {
+    const sheetsOrders = googleSheetsService.enabled ? await loadOrdersFromSheets() : [];
+
+    res.status(200).json({
+      success: true,
+      service: 'orders',
+      googleSheetsEnabled: googleSheetsService.enabled,
+      inMemoryOrdersCount: orders.length,
+      sheetsOrdersCount: sheetsOrders.length,
+      spreadsheetId: process.env.GOOGLE_SPREADSHEET_ID || 'not set',
+      status: 'operational'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      status: 'error'
+    });
+  }
 });
 
 // Helper function to get order sheets service
@@ -84,13 +96,28 @@ const loadOrdersFromSheets = async () => {
     const sheets = googleSheetsService.sheets;
     const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;
 
+    console.log('🔍 Attempting to load orders from Google Sheets...');
+    console.log('📝 Spreadsheet ID:', spreadsheetId);
+
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
       range: 'Orders!A:J'
     });
 
     const rows = response.data.values || [];
+    console.log(`📊 Found ${rows.length} rows in Orders sheet`);
+
     if (rows.length === 0) {
+      console.log('⚠️  Orders sheet is empty, creating header row...');
+      // Create header row if sheet is empty
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: 'Orders!A1:J1',
+        valueInputOption: 'RAW',
+        resource: {
+          values: [['Order ID', 'Client Name', 'Items', 'Total Items', 'Total Amount', 'Status', 'Created At', 'Delivery Address', 'Contact Number', 'Notes']]
+        }
+      });
       return [];
     }
 
@@ -109,9 +136,52 @@ const loadOrdersFromSheets = async () => {
     }));
 
     console.log(`✅ Loaded ${loadedOrders.length} orders from Google Sheets`);
+    loadedOrders.forEach(order => {
+      console.log(`  - ${order.id}: ${order.clientName} (${order.status})`);
+    });
+
     return loadedOrders;
   } catch (error) {
     console.error('⚠️  Could not load orders from Google Sheets:', error.message);
+    console.error('📋 Full error:', error);
+
+    // Check if it's because the Orders sheet doesn't exist
+    if (error.message && error.message.includes('Unable to parse range')) {
+      console.log('🔧 Orders sheet does not exist, creating it...');
+      try {
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId,
+          requestBody: {
+            requests: [{
+              addSheet: {
+                properties: {
+                  title: 'Orders',
+                  gridProperties: {
+                    rowCount: 1000,
+                    columnCount: 10
+                  }
+                }
+              }
+            }]
+          }
+        });
+
+        // Add header row
+        await sheets.spreadsheets.values.update({
+          spreadsheetId,
+          range: 'Orders!A1:J1',
+          valueInputOption: 'RAW',
+          resource: {
+            values: [['Order ID', 'Client Name', 'Items', 'Total Items', 'Total Amount', 'Status', 'Created At', 'Delivery Address', 'Contact Number', 'Notes']]
+          }
+        });
+
+        console.log('✅ Orders sheet created successfully');
+      } catch (createError) {
+        console.error('❌ Failed to create Orders sheet:', createError.message);
+      }
+    }
+
     return orders; // Return in-memory orders as fallback
   }
 };

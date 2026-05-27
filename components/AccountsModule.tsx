@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { MOCK_INVOICES } from '../constants';
 import { Invoice, SalesOrder } from '../types';
 import { Filter, CheckCircle, AlertCircle, Clock, RefreshCw } from 'lucide-react';
 

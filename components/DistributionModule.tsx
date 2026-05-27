@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MOCK_ORDERS } from '../constants';
 import { SalesOrder } from '../types';
 import { ArrowRight, FileCheck, Truck, FileText, PenTool, Eraser } from 'lucide-react';
 
