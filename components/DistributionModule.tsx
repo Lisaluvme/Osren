@@ -14,6 +14,7 @@ const DistributionModule: React.FC<DistributionModuleProps> = ({newOrder}) => {
 
   // Fetch real orders from backend on component mount and when new order is added
   useEffect(() => {
+    console.log('🔄 DistributionModule mounted/updated, fetching orders...');
     fetchOrders();
   }, [newOrder]); // Re-fetch when newOrder changes to ensure we get latest data
 
@@ -24,7 +25,13 @@ const DistributionModule: React.FC<DistributionModuleProps> = ({newOrder}) => {
       console.log('🔍 Fetching orders from:', `${API_BASE}/orders`);
       console.log('🌍 Environment VITE_API_BASE_URL:', import.meta.env.VITE_API_BASE_URL);
 
-      const response = await fetch(`${API_BASE}/orders`);
+      const response = await fetch(`${API_BASE}/orders`, {
+        cache: 'no-store', // Prevent caching
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
       const data = await response.json();
 
       console.log('📦 Orders response:', data);
@@ -46,6 +53,7 @@ const DistributionModule: React.FC<DistributionModuleProps> = ({newOrder}) => {
         }));
 
         console.log('✅ Transformed orders:', transformedOrders);
+        console.log('✅ Order IDs:', transformedOrders.map(o => o.id));
         setOrders(transformedOrders);
       } else {
         console.error('❌ Failed to fetch orders:', data.error);
