@@ -21,12 +21,14 @@ const DistributionModule: React.FC<DistributionModuleProps> = ({newOrder}) => {
     try {
       setLoading(true);
       const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
-      console.log('Fetching orders from:', `${API_BASE}/orders`);
+      console.log('🔍 Fetching orders from:', `${API_BASE}/orders`);
+      console.log('🌍 Environment VITE_API_BASE_URL:', import.meta.env.VITE_API_BASE_URL);
 
       const response = await fetch(`${API_BASE}/orders`);
       const data = await response.json();
 
-      console.log('Orders response:', data);
+      console.log('📦 Orders response:', data);
+      console.log('📊 Orders count:', data.data?.length || 0);
 
       if (data.success) {
         // Transform backend orders to SalesOrder format
@@ -43,14 +45,14 @@ const DistributionModule: React.FC<DistributionModuleProps> = ({newOrder}) => {
           date: order.createdAt || new Date().toISOString()
         }));
 
-        console.log('Transformed orders:', transformedOrders);
+        console.log('✅ Transformed orders:', transformedOrders);
         setOrders(transformedOrders);
       } else {
-        console.error('Failed to fetch orders:', data.error);
+        console.error('❌ Failed to fetch orders:', data.error);
         setOrders([]);
       }
     } catch (error) {
-      console.error('Error fetching orders:', error);
+      console.error('❌ Error fetching orders:', error);
       // Show empty state instead of mock data to make it clear we're using real data
       setOrders([]);
     } finally {
@@ -113,17 +115,65 @@ const DistributionModule: React.FC<DistributionModuleProps> = ({newOrder}) => {
     if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
   };
 
-  const saveSignature = () => {
+  const saveSignature = async () => {
      if (signingOrder && canvasRef.current) {
          const dataUrl = canvasRef.current.toDataURL();
-         setOrders(prev => prev.map(o => o.id === signingOrder ? { ...o, status: 'Invoiced', signature: dataUrl } : o));
-         setSigningOrder(null);
+
+         try {
+           const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+           console.log('🔄 Updating order status to Invoiced with signature:', signingOrder);
+
+           const response = await fetch(`${API_BASE}/orders/${signingOrder}`, {
+             method: 'PATCH',
+             headers: { 'Content-Type': 'application/json' },
+             body: JSON.stringify({ status: 'Invoiced', signature: dataUrl })
+           });
+
+           const data = await response.json();
+           console.log('✅ Signature saved response:', data);
+
+           if (data.success) {
+             // Update local state
+             setOrders(prev => prev.map(o => o.id === signingOrder ? { ...o, status: 'Invoiced', signature: dataUrl } : o));
+             setSigningOrder(null);
+           } else {
+             console.error('❌ Failed to save signature:', data.error);
+             alert('Failed to save signature. Please try again.');
+           }
+         } catch (error) {
+           console.error('❌ Error saving signature:', error);
+           alert('Failed to save signature. Please try again.');
+         }
      }
   };
 
-  const advanceStatus = (id: string, currentStatus: string) => {
+  const advanceStatus = async (id: string, currentStatus: string) => {
       if (currentStatus === 'SO') {
-          setOrders(prev => prev.map(o => o.id === id ? { ...o, status: 'DO' } : o));
+          // Update to DO status
+          try {
+            const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+            console.log('🔄 Updating order status to DO:', id);
+
+            const response = await fetch(`${API_BASE}/orders/${id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status: 'DO' })
+            });
+
+            const data = await response.json();
+            console.log('✅ Status update response:', data);
+
+            if (data.success) {
+              // Update local state
+              setOrders(prev => prev.map(o => o.id === id ? { ...o, status: 'DO' } : o));
+            } else {
+              console.error('❌ Failed to update status:', data.error);
+              alert('Failed to update status. Please try again.');
+            }
+          } catch (error) {
+            console.error('❌ Error updating status:', error);
+            alert('Failed to update status. Please try again.');
+          }
       } else if (currentStatus === 'DO') {
           setSigningOrder(id);
           // Wait for render then clear if needed

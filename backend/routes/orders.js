@@ -406,7 +406,9 @@ router.put('/:id', async (req, res) => {
   try {
     const { status, deliveryAddress, contactNumber, notes } = req.body;
 
-    const orderIndex = orders.findIndex(o => o.id === req.params.id);
+    // Try to load from Google Sheets first
+    let allOrders = googleSheetsService.enabled ? await loadOrdersFromSheets() : [...orders];
+    const orderIndex = allOrders.findIndex(o => o.id === req.params.id);
 
     if (orderIndex === -1) {
       return res.status(404).json({
@@ -416,15 +418,31 @@ router.put('/:id', async (req, res) => {
     }
 
     // Update order
-    if (status) orders[orderIndex].status = status;
-    if (deliveryAddress) orders[orderIndex].deliveryAddress = deliveryAddress;
-    if (contactNumber) orders[orderIndex].contactNumber = contactNumber;
-    if (notes) orders[orderIndex].notes = notes;
-    orders[orderIndex].updatedAt = new Date().toISOString();
+    if (status) allOrders[orderIndex].status = status;
+    if (deliveryAddress) allOrders[orderIndex].deliveryAddress = deliveryAddress;
+    if (contactNumber) allOrders[orderIndex].contactNumber = contactNumber;
+    if (notes) allOrders[orderIndex].notes = notes;
+    allOrders[orderIndex].updatedAt = new Date().toISOString();
+
+    // Update in-memory storage
+    const memoryIndex = orders.findIndex(o => o.id === req.params.id);
+    if (memoryIndex !== -1) {
+      orders[memoryIndex] = allOrders[orderIndex];
+    }
+
+    // Try to update in Google Sheets
+    if (googleSheetsService.enabled) {
+      try {
+        await updateOrderInSheets(allOrders[orderIndex]);
+        console.log('✅ Order updated in Google Sheets:', req.params.id);
+      } catch (sheetsError) {
+        console.error('⚠️  Could not update order in Google Sheets:', sheetsError.message);
+      }
+    }
 
     res.status(200).json({
       success: true,
-      data: orders[orderIndex],
+      data: allOrders[orderIndex],
       message: 'Order updated successfully'
     });
   } catch (error) {
@@ -435,6 +453,122 @@ router.put('/:id', async (req, res) => {
     });
   }
 });
+
+// PATCH /api/orders/:id - Update order status
+router.patch('/:id', async (req, res) => {
+  try {
+    const { status } = req.body;
+
+    if (!status) {
+      return res.status(400).json({
+        success: false,
+        error: 'Status is required'
+      });
+    }
+
+    // Try to load from Google Sheets first
+    let allOrders = googleSheetsService.enabled ? await loadOrdersFromSheets() : [...orders];
+    const orderIndex = allOrders.findIndex(o => o.id === req.params.id);
+
+    if (orderIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        error: 'Order not found'
+      });
+    }
+
+    // Update status
+    allOrders[orderIndex].status = status;
+    allOrders[orderIndex].updatedAt = new Date().toISOString();
+
+    // Update in-memory storage
+    const memoryIndex = orders.findIndex(o => o.id === req.params.id);
+    if (memoryIndex !== -1) {
+      orders[memoryIndex] = allOrders[orderIndex];
+    }
+
+    // Try to update in Google Sheets
+    if (googleSheetsService.enabled) {
+      try {
+        await updateOrderInSheets(allOrders[orderIndex]);
+        console.log('✅ Order status updated in Google Sheets:', req.params.id, '→', status);
+      } catch (sheetsError) {
+        console.error('⚠️  Could not update order status in Google Sheets:', sheetsError.message);
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      data: allOrders[orderIndex],
+      message: 'Order status updated successfully'
+    });
+  } catch (error) {
+    console.error('Error updating order status:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update order status'
+    });
+  }
+});
+
+// Helper function to update order in Google Sheets
+const updateOrderInSheets = async (order) => {
+  if (!googleSheetsService.enabled) {
+    throw new Error('Google Sheets not enabled');
+  }
+
+  const sheets = googleSheetsService.sheets;
+  const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;
+
+  // First, get all orders to find the row index
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: 'Orders!A:J'
+  });
+
+  const rows = response.data.values || [];
+  if (rows.length === 0) {
+    throw new Error('No orders found in sheet');
+  }
+
+  // Find the row with this order ID (skip header row)
+  let rowIndex = -1;
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0] === order.id) {
+      rowIndex = i + 1; // Convert to 1-based index for sheets API
+      break;
+    }
+  }
+
+  if (rowIndex === -1) {
+    throw new Error('Order not found in sheet');
+  }
+
+  // Update the row
+  const orderData = [
+    order.id,
+    order.clientName,
+    order.items.map(item => `${item.name} (x${item.quantity})`).join(', '),
+    order.totalItems,
+    order.totalAmount,
+    order.status,
+    order.createdAt,
+    order.deliveryAddress || '',
+    order.contactNumber || '',
+    order.notes || ''
+  ];
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `Orders!A${rowIndex}:J${rowIndex}`,
+    valueInputOption: 'RAW',
+    resource: {
+      values: [orderData]
+    }
+  });
+
+  console.log(`✅ Updated order ${order.id} at row ${rowIndex}`);
+};
 
 // DELETE /api/orders/:id - Cancel order
 router.delete('/:id', (req, res) => {
