@@ -251,8 +251,7 @@ const FinanceModule: React.FC<FinanceModuleProps> = ({ currentRole }) => {
                             </Bar>
                         </BarChart>
                     </ResponsiveContainer>
-                    </div>
-            </div>
+                </div>
             </div>
 
             {/* Recent Orders */}
@@ -315,6 +314,7 @@ const FinanceModule: React.FC<FinanceModuleProps> = ({ currentRole }) => {
                         </tbody>
                     </table>
                 </div>
+            </div>
             </div>
         );
   };
