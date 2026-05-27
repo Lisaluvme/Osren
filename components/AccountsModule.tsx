@@ -12,24 +12,21 @@ const AccountsModule: React.FC<AccountsModuleProps> = ({newOrder}) => {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Fetch real orders from backend on component mount
+  // Fetch real orders from backend on component mount and when new order is placed
   useEffect(() => {
     fetchOrders();
-  }, []);
-
-  // Refetch when new order is placed
-  useEffect(() => {
-    if (newOrder) {
-      fetchOrders();
-    }
-  }, [newOrder]);
+  }, [newOrder]); // Re-fetch when newOrder changes
 
   const fetchOrders = async () => {
     try {
       setLoading(true);
       const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+      console.log('Accounts: Fetching orders from:', `${API_BASE}/orders`);
+
       const response = await fetch(`${API_BASE}/orders`);
       const data = await response.json();
+
+      console.log('Accounts: Orders response:', data);
 
       if (data.success) {
         // Transform orders to Invoice format
@@ -41,12 +38,16 @@ const AccountsModule: React.FC<AccountsModuleProps> = ({newOrder}) => {
           status: mapOrderStatusToInvoiceStatus(order.status)
         }));
 
+        console.log('Accounts: Transformed invoices:', transformedInvoices);
         setInvoices(transformedInvoices);
+      } else {
+        console.error('Accounts: Failed to fetch orders:', data.error);
+        setInvoices([]);
       }
     } catch (error) {
-      console.error('Error fetching orders:', error);
-      // Fallback to mock data if API fails
-      setInvoices(MOCK_INVOICES);
+      console.error('Accounts: Error fetching orders:', error);
+      // Show empty state instead of mock data
+      setInvoices([]);
     } finally {
       setLoading(false);
     }

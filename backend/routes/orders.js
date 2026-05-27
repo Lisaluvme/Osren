@@ -73,6 +73,72 @@ const saveOrderToSheets = async (order) => {
   }
 };
 
+// Helper function to load orders from Google Sheets
+const loadOrdersFromSheets = async () => {
+  if (!googleSheetsService.enabled) {
+    console.log('ℹ️  Google Sheets not enabled - using in-memory orders only');
+    return orders;
+  }
+
+  try {
+    const sheets = googleSheetsService.sheets;
+    const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: 'Orders!A:J'
+    });
+
+    const rows = response.data.values || [];
+    if (rows.length === 0) {
+      return [];
+    }
+
+    // Skip header row, transform data to order objects
+    const loadedOrders = rows.slice(1).map(row => ({
+      id: row[0] || '',
+      clientName: row[1] || '',
+      items: parseItemsFromSheet(row[2] || ''),
+      totalItems: parseInt(row[3]) || 0,
+      totalAmount: parseFloat(row[4]) || 0,
+      status: row[5] || 'pending',
+      createdAt: row[6] || new Date().toISOString(),
+      deliveryAddress: row[7] || '',
+      contactNumber: row[8] || '',
+      notes: row[9] || ''
+    }));
+
+    console.log(`✅ Loaded ${loadedOrders.length} orders from Google Sheets`);
+    return loadedOrders;
+  } catch (error) {
+    console.error('⚠️  Could not load orders from Google Sheets:', error.message);
+    return orders; // Return in-memory orders as fallback
+  }
+};
+
+// Helper function to parse items from sheet format
+const parseItemsFromSheet = (itemsString) => {
+  if (!itemsString) return [];
+  try {
+    // Parse "Item 1 (x2), Item 2 (x3)" format back to items array
+    return itemsString.split(', ').map(itemStr => {
+      const match = itemStr.match(/^(.+?) \(x(\d+)\)$/);
+      if (match) {
+        return {
+          name: match[1],
+          quantity: parseInt(match[2]),
+          unitPrice: 0, // Will be calculated from inventory
+          itemTotal: 0
+        };
+      }
+      return { name: itemStr, quantity: 1, unitPrice: 0, itemTotal: 0 };
+    });
+  } catch (error) {
+    console.error('Error parsing items from sheet:', error);
+    return [];
+  }
+};
+
 // Helper function to update inventory after order
 const updateInventoryAfterOrder = async (items) => {
   if (!googleSheetsService.enabled) {
@@ -196,7 +262,17 @@ router.get('/', async (req, res) => {
   try {
     const { status, client, limit = 50 } = req.query;
 
-    let filteredOrders = [...orders];
+    // Load orders from Google Sheets if enabled, otherwise use memory
+    let allOrders = googleSheetsService.enabled ? await loadOrdersFromSheets() : [...orders];
+
+    // Also merge with any in-memory orders that might not be in Sheets yet
+    if (googleSheetsService.enabled && orders.length > 0) {
+      const sheetOrderIds = new Set(allOrders.map(o => o.id));
+      const newMemoryOrders = orders.filter(o => !sheetOrderIds.has(o.id));
+      allOrders = [...newMemoryOrders, ...allOrders];
+    }
+
+    let filteredOrders = [...allOrders];
 
     // Filter by status
     if (status) {

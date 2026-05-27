@@ -13,24 +13,21 @@ const DistributionModule: React.FC<DistributionModuleProps> = ({newOrder}) => {
   const [signingOrder, setSigningOrder] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Fetch real orders from backend on component mount
+  // Fetch real orders from backend on component mount and when new order is added
   useEffect(() => {
     fetchOrders();
-  }, []);
-
-  // Add new order when provided and refetch to get all orders
-  useEffect(() => {
-    if (newOrder) {
-      fetchOrders();
-    }
-  }, [newOrder]);
+  }, [newOrder]); // Re-fetch when newOrder changes to ensure we get latest data
 
   const fetchOrders = async () => {
     try {
       setLoading(true);
       const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+      console.log('Fetching orders from:', `${API_BASE}/orders`);
+
       const response = await fetch(`${API_BASE}/orders`);
       const data = await response.json();
+
+      console.log('Orders response:', data);
 
       if (data.success) {
         // Transform backend orders to SalesOrder format
@@ -47,12 +44,16 @@ const DistributionModule: React.FC<DistributionModuleProps> = ({newOrder}) => {
           date: order.createdAt || new Date().toISOString()
         }));
 
+        console.log('Transformed orders:', transformedOrders);
         setOrders(transformedOrders);
+      } else {
+        console.error('Failed to fetch orders:', data.error);
+        setOrders([]);
       }
     } catch (error) {
       console.error('Error fetching orders:', error);
-      // Fallback to mock data if API fails
-      setOrders(MOCK_ORDERS);
+      // Show empty state instead of mock data to make it clear we're using real data
+      setOrders([]);
     } finally {
       setLoading(false);
     }
