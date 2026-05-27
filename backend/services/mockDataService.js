@@ -206,6 +206,27 @@ class MockDataService {
     );
   }
 
+  async adjustQuantity(id, adjustment) {
+    // Simulate network delay
+    await this.delay(300);
+
+    const itemIndex = this.inventory.findIndex(item => item.id === id);
+    if (itemIndex === -1) {
+      throw new Error('Item not found');
+    }
+
+    // Adjust quantity
+    const newQuantity = Math.max(0, this.inventory[itemIndex].quantity + adjustment);
+    this.inventory[itemIndex].quantity = newQuantity;
+    this.inventory[itemIndex].lastMovement = new Date().toISOString().split('T')[0];
+
+    // Recalculate derived fields
+    this.inventory[itemIndex] = this.calculateDerivedFields(this.inventory[itemIndex]);
+
+    console.log('Adjusted quantity for:', this.inventory[itemIndex].name, 'to', newQuantity);
+    return this.inventory[itemIndex];
+  }
+
   // Helper method to simulate network delay
   delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));

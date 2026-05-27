@@ -20,7 +20,7 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
   const [filterStatus, setFilterStatus] = useState('All');
   const [sortBy, setSortBy] = useState('name');
 
-  // Fetch inventory from Google Sheets
+  // Fetch inventory from Google Sheets (manual refresh only)
   const fetchInventoryFromSheets = useCallback(async () => {
     try {
       setSyncing(true);
@@ -37,11 +37,6 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
       setSyncing(false);
     }
   }, [onInventoryChange]);
-
-  // Fetch inventory on component mount
-  useEffect(() => {
-    fetchInventoryFromSheets();
-  }, [fetchInventoryFromSheets]);
 
   useEffect(() => {
     const fetchPrediction = async () => {

@@ -5,6 +5,13 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 class GoogleSheetsService {
   constructor() {
+    // Cache configuration
+    this.cache = {
+      inventory: null,
+      timestamp: 0,
+      ttl: 30000 // 30 seconds cache
+    };
+
     // Check if we should even try to initialize Google Sheets
     // Don't initialize if USE_MOCK_DATA is true
     this.enabled = !(
@@ -110,6 +117,13 @@ class GoogleSheetsService {
   }
 
   async getInventory() {
+    // Check cache first
+    const now = Date.now();
+    if (this.cache.inventory && (now - this.cache.timestamp) < this.cache.ttl) {
+      console.log('Returning cached inventory');
+      return this.cache.inventory;
+    }
+
     try {
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
@@ -167,11 +181,22 @@ class GoogleSheetsService {
         return this.calculateDerivedFields(inventoryItem);
       });
 
+      // Update cache
+      this.cache.inventory = inventory;
+      this.cache.timestamp = now;
+
       return inventory;
     } catch (error) {
       console.error('Error getting inventory:', error);
       throw error;
     }
+  }
+
+  // Invalidate cache when data changes
+  invalidateCache() {
+    this.cache.inventory = null;
+    this.cache.timestamp = 0;
+    console.log('Cache invalidated');
   }
 
   async updateInventory(inventory) {
@@ -219,6 +244,10 @@ class GoogleSheetsService {
           values: allData,
         },
       });
+
+      // Update cache with new data
+      this.cache.inventory = inventory;
+      this.cache.timestamp = Date.now();
 
       return { success: true, message: 'Inventory updated successfully' };
     } catch (error) {
@@ -307,6 +336,39 @@ class GoogleSheetsService {
       return filteredItems;
     } catch (error) {
       console.error('Error searching items:', error);
+      throw error;
+    }
+  }
+
+  // Optimized method to adjust quantity without full re-read
+  async adjustQuantity(id, adjustment) {
+    try {
+      // Use cached inventory to avoid extra Google Sheets read
+      let inventory = this.cache.inventory;
+
+      // If cache is empty or stale, fetch fresh data
+      if (!inventory || (Date.now() - this.cache.timestamp) >= this.cache.ttl) {
+        inventory = await this.getInventory();
+      }
+
+      const itemIndex = inventory.findIndex(item => item.id === id);
+
+      if (itemIndex === -1) {
+        throw new Error('Item not found');
+      }
+
+      // Update quantity
+      const newQuantity = Math.max(0, inventory[itemIndex].quantity + adjustment);
+      inventory[itemIndex].quantity = newQuantity;
+      inventory[itemIndex].lastMovement = new Date().toISOString().split('T')[0];
+      inventory[itemIndex] = this.calculateDerivedFields(inventory[itemIndex]);
+
+      // Update the sheet
+      await this.updateInventory(inventory);
+
+      return inventory[itemIndex];
+    } catch (error) {
+      console.error('Error adjusting quantity:', error);
       throw error;
     }
   }

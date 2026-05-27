@@ -101,27 +101,36 @@ router.post('/adjust', checkServiceEnabled, async (req, res) => {
       });
     }
 
-    // Get current item
-    const inventory = await dataService.getInventory();
-    const item = inventory.find(i => i.id === id);
+    // Use optimized adjustQuantity method if available (Google Sheets)
+    if (dataService.adjustQuantity) {
+      const result = await dataService.adjustQuantity(id, adjustment);
+      res.status(200).json({
+        success: true,
+        data: result,
+      });
+    } else {
+      // Fallback for mock data service
+      const inventory = await dataService.getInventory();
+      const item = inventory.find(i => i.id === id);
 
-    if (!item) {
-      return res.status(404).json({
-        success: false,
-        error: 'Item not found'
+      if (!item) {
+        return res.status(404).json({
+          success: false,
+          error: 'Item not found'
+        });
+      }
+
+      const newQuantity = Math.max(0, item.quantity + adjustment);
+      const result = await dataService.updateItem(id, {
+        quantity: newQuantity,
+        lastMovement: new Date().toISOString().split('T')[0]
+      });
+
+      res.status(200).json({
+        success: true,
+        data: result,
       });
     }
-
-    const newQuantity = Math.max(0, item.quantity + adjustment);
-    const result = await dataService.updateItem(id, {
-      quantity: newQuantity,
-      lastMovement: new Date().toISOString().split('T')[0]
-    });
-
-    res.status(200).json({
-      success: true,
-      data: result,
-    });
   } catch (error) {
     console.error('Error adjusting quantity:', error);
     res.status(500).json({
