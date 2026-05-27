@@ -232,26 +232,26 @@ const FinanceModule: React.FC<FinanceModuleProps> = ({ currentRole }) => {
                         </ResponsiveContainer>
                     </div>
                 </div>
+            </div>
 
-                {/* Sales Summary */}
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                    <h3 className="text-lg font-semibold text-slate-800 mb-4">Sales Summary</h3>
-                    <div className="h-64 w-full">
-                        <ResponsiveContainer width="100%" height={256}>
-                            <BarChart data={chartData} layout="vertical">
-                                <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis type="number" />
-                                <YAxis type="category" dataKey="name" width={30} />
-                                <Tooltip cursor={{fill: 'transparent'}} formatter={(value) => `$${value.toLocaleString()}`} />
-                                <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={40}>
-                                    {chartData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={entry.color} />
-                                    ))}
-                                </Bar>
-                            </BarChart>
+            {/* Sales Summary */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <h3 className="text-lg font-semibold text-slate-800 mb-4">Sales Summary</h3>
+                <div className="h-64 w-full">
+                    <ResponsiveContainer width="100%" height={256}>
+                        <BarChart data={chartData} layout="vertical">
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis type="number" />
+                            <YAxis type="category" dataKey="name" width={30} />
+                            <Tooltip cursor={{fill: 'transparent'}} formatter={(value) => `$${value.toLocaleString()}`} />
+                            <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={40}>
+                                {chartData.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={entry.color} />
+                                ))}
+                            </Bar>
                         </ResponsiveContainer>
                     </div>
-                </div>
+            </div>
             </div>
 
             {/* Recent Orders */}
