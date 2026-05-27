@@ -1,79 +1,320 @@
 import React, { useState, useEffect } from 'react';
-import { MOCK_CASHFLOW, MOCK_INVENTORY, MOCK_INVOICES } from '../constants';
 import { getStockPurchaseRecommendation } from '../services/geminiService';
-import { UserRole } from '../types';
-import { 
-  TrendingUp, TrendingDown, DollarSign, BrainCircuit, 
-  AlertCircle, Clock, Target, Users, Activity, CreditCard
+import { UserRole, Invoice } from '../types';
+import {
+  TrendingUp, TrendingDown, DollarSign, BrainCircuit,
+  AlertCircle, Clock, Target, Users, Activity, CreditCard, ShoppingCart, Package, RefreshCw
 } from 'lucide-react';
-import { 
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  BarChart, Bar, Cell 
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar, Cell
 } from 'recharts';
 
 interface FinanceModuleProps {
   currentRole: UserRole;
 }
 
+interface RealOrder {
+  id: string;
+  clientName: string;
+  totalAmount: number;
+  status: string;
+  createdAt: string;
+}
+
 const FinanceModule: React.FC<FinanceModuleProps> = ({ currentRole }) => {
   const [recommendation, setRecommendation] = useState<string>('Analyzing market data...');
   const [loading, setLoading] = useState(false);
+  const [orders, setOrders] = useState<RealOrder[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(true);
+  const [inventory, setInventory] = useState<any[]>([]);
+
+  // Fetch real orders and inventory on component mount
+  useEffect(() => {
+    fetchRealData();
+  }, []);
 
   // AI Recommendation only fetches for Admin to save tokens/resources
   useEffect(() => {
     if (currentRole === UserRole.ADMIN || currentRole === UserRole.WAREHOUSE) {
-        const fetchAdvice = async () => {
-          setLoading(true);
-          const advice = await getStockPurchaseRecommendation(MOCK_CASHFLOW, MOCK_INVENTORY);
-          setRecommendation(advice);
-          setLoading(false);
-        };
+      const fetchAdvice = async () => {
+        setLoading(true);
+        const advice = await getStockPurchaseRecommendation(
+          // Generate real cashflow from orders
+          generateCashflowFromOrders(orders),
+          inventory
+        );
+        setRecommendation(advice);
+        setLoading(false);
+      };
+      if (orders.length > 0 || inventory.length > 0) {
         fetchAdvice();
+      }
     }
-  }, [currentRole]);
+  }, [currentRole, orders, inventory]);
+
+  const fetchRealData = async () => {
+    try {
+      setOrdersLoading(true);
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+
+      // Fetch real orders
+      const ordersResponse = await fetch(`${API_BASE}/orders`);
+      const ordersData = await ordersResponse.json();
+
+      // Fetch real inventory
+      const inventoryResponse = await fetch(`${API_BASE}/inventory/list`);
+      const inventoryData = await inventoryResponse.json();
+
+      if (ordersData.success) {
+        setOrders(ordersData.data);
+      }
+
+      if (inventoryData.success) {
+        setInventory(inventoryData.data);
+      }
+    } catch (error) {
+      console.error('Error fetching real data:', error);
+    } finally {
+      setOrdersLoading(false);
+    }
+  };
+
+  const generateCashflowFromOrders = (realOrders: RealOrder[]) => {
+    // Generate last 6 months of cashflow from real orders
+    const monthlyData = [];
+    const now = new Date();
+
+    for (let i = 5; i >= 0; i--) {
+      const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthStr = monthDate.toLocaleString('default', { month: 'short' });
+
+      // Calculate revenue from orders in this month
+      const monthRevenue = realOrders
+        .filter(order => {
+          const orderDate = new Date(order.createdAt);
+          return orderDate.getMonth() === monthDate.getMonth() &&
+                 orderDate.getFullYear() === monthDate.getFullYear() &&
+                 ['invoiced', 'delivered', 'paid'].includes(order.status.toLowerCase());
+        })
+        .reduce((sum, order) => sum + order.totalAmount, 0);
+
+      // Estimate expenses as 60% of revenue
+      const expenses = monthRevenue * 0.6;
+
+      monthlyData.push({
+        month: monthStr,
+        revenue: Math.round(monthRevenue),
+        expenses: Math.round(expenses)
+      });
+    }
+
+    return monthlyData;
+  };
+
+  const calculateRealSalesMetrics = () => {
+    const paidOrders = orders.filter(order =>
+      ['invoiced', 'delivered', 'paid'].includes(order.status.toLowerCase())
+    );
+
+    const pendingOrders = orders.filter(order =>
+      ['pending', 'processing'].includes(order.status.toLowerCase())
+    );
+
+    const totalSales = paidOrders.reduce((sum, order) => sum + order.totalAmount, 0);
+    const pendingAmount = pendingOrders.reduce((sum, order) => sum + order.totalAmount, 0);
+
+    return {
+      totalSales,
+      pendingAmount,
+      paidOrdersCount: paidOrders.length,
+      pendingOrdersCount: pendingOrders.length,
+      totalOrders: orders.length
+    };
+  };
+
+  const metrics = calculateRealSalesMetrics();
 
   // --- Render Views ---
 
   const renderAccountsDashboard = () => {
-    const pendingTotal = MOCK_INVOICES.filter(i => i.status === 'Pending').reduce((acc, curr) => acc + curr.amount, 0);
-    const overdueTotal = MOCK_INVOICES.filter(i => i.status === 'Overdue').reduce((acc, curr) => acc + curr.amount, 0);
-    const paidTotal = MOCK_INVOICES.filter(i => i.status === 'Paid').reduce((acc, curr) => acc + curr.amount, 0);
+    const cashflowData = generateCashflowFromOrders(orders);
+    const recentOrders = orders.slice(0, 5); // Get 5 most recent orders
 
     const chartData = [
-        { name: 'Paid', value: paidTotal, color: '#22c55e' },
-        { name: 'Pending', value: pendingTotal, color: '#eab308' },
-        { name: 'Overdue', value: overdueTotal, color: '#ef4444' }
+        { name: 'Completed Sales', value: metrics.totalSales, color: '#22c55e' },
+        { name: 'Pending Orders', value: metrics.pendingAmount, color: '#eab308' }
     ];
 
     return (
         <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-slate-800">Accounts & Finance Overview</h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-l-yellow-400 border border-slate-200">
-                    <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-slate-500 font-medium">Pending Invoices</h3>
-                        <div className="p-2 bg-yellow-50 rounded-lg">
-                            <Clock className="w-6 h-6 text-yellow-500" />
-                        </div>
+            <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-bold text-slate-800">Finance Dashboard</h2>
+                <button
+                    onClick={fetchRealData}
+                    className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50"
+                    disabled={ordersLoading}
+                >
+                    <RefreshCw className={`w-4 h-4 ${ordersLoading ? 'animate-spin' : ''}`} />
+                    <span>Refresh</span>
+                </button>
+            </div>
+
+            {/* Key Metrics */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <div className="flex items-center justify-between mb-2">
+                        <DollarSign className="w-5 h-5 text-green-500" />
+                        <span className="text-xs text-green-500 bg-green-50 px-2 py-1 rounded-full">Revenue</span>
                     </div>
-                    <p className="text-3xl font-bold text-slate-800">${pendingTotal.toLocaleString()}</p>
-                    <p className="text-sm text-slate-400 mt-2">Requires approval or payment</p>
+                    <p className="text-2xl font-bold text-slate-800">${metrics.totalSales.toLocaleString()}</p>
+                    <p className="text-sm text-slate-400 mt-1">Total completed sales</p>
                 </div>
 
-                <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-l-red-500 border border-slate-200">
-                    <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-slate-500 font-medium">Overdue Amount</h3>
-                        <div className="p-2 bg-red-50 rounded-lg">
-                            <AlertCircle className="w-6 h-6 text-red-500" />
-                        </div>
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <div className="flex items-center justify-between mb-2">
+                        <ShoppingCart className="w-5 h-5 text-blue-500" />
+                        <span className="text-xs text-blue-500 bg-blue-50 px-2 py-1 rounded-full">Orders</span>
                     </div>
-                    <p className="text-3xl font-bold text-slate-800">${overdueTotal.toLocaleString()}</p>
-                    <p className="text-sm text-red-600 mt-2 font-medium">Immediate attention needed</p>
+                    <p className="text-2xl font-bold text-slate-800">{metrics.totalOrders}</p>
+                    <p className="text-sm text-slate-400 mt-1">Total orders placed</p>
+                </div>
+
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <div className="flex items-center justify-between mb-2">
+                        <Package className="w-5 h-5 text-yellow-500" />
+                        <span className="text-xs text-yellow-500 bg-yellow-50 px-2 py-1 rounded-full">Pending</span>
+                    </div>
+                    <p className="text-2xl font-bold text-slate-800">${metrics.pendingAmount.toLocaleString()}</p>
+                    <p className="text-sm text-slate-400 mt-1">{metrics.pendingOrdersCount} pending orders</p>
+                </div>
+
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <div className="flex items-center justify-between mb-2">
+                        <Activity className="w-5 h-5 text-purple-500" />
+                        <span className="text-xs text-purple-500 bg-purple-50 px-2 py-1 rounded-full">Conversion</span>
+                    </div>
+                    <p className="text-2xl font-bold text-slate-800">
+                        {metrics.totalOrders > 0 ? Math.round((metrics.paidOrdersCount / metrics.totalOrders) * 100) : 0}%
+                    </p>
+                    <p className="text-sm text-slate-400 mt-1">Order completion rate</p>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Sales Chart */}
+                <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <h3 className="text-lg font-semibold text-slate-800 mb-4">Revenue Trend (Last 6 Months)</h3>
+                    <div className="h-64 w-full">
+                        <ResponsiveContainer width="100%" height={256}>
+                            <AreaChart data={cashflowData}>
+                                <defs>
+                                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#22c55e" stopOpacity={0.8}/>
+                                        <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                <XAxis dataKey="month" />
+                                <YAxis />
+                                <Tooltip
+                                    formatter={(value) => [`$${value.toLocaleString()}`, 'Revenue']}
+                                    cursor={{fill: 'transparent'}}
+                                />
+                                <Area
+                                    type="monotone"
+                                    dataKey="revenue"
+                                    stroke="#22c55e"
+                                    fillOpacity={1}
+                                    fill="url(#colorRevenue)"
+                                />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+
+                {/* Sales Summary */}
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <h3 className="text-lg font-semibold text-slate-800 mb-4">Sales Summary</h3>
+                    <div className="h-64 w-full">
+                        <ResponsiveContainer width="100%" height={256}>
+                            <BarChart data={chartData} layout="vertical">
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis type="number" />
+                                <YAxis type="category" dataKey="name" width={30} />
+                                <Tooltip cursor={{fill: 'transparent'}} formatter={(value) => `$${value.toLocaleString()}`} />
+                                <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={40}>
+                                    {chartData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={entry.color} />
+                                    ))}
+                                </Bar>
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+            </div>
+
+            {/* Recent Orders */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                    <h3 className="font-semibold text-slate-800 flex items-center">
+                        <ShoppingCart className="w-4 h-4 mr-2 text-blue-500" />
+                        Recent Orders
+                    </h3>
+                    <span className="text-sm text-slate-400">Last 5 orders</span>
+                </div>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs uppercase tracking-wider">
+                                <th className="p-4 font-semibold">Order ID</th>
+                                <th className="p-4 font-semibold">Client</th>
+                                <th className="p-4 font-semibold text-right">Amount</th>
+                                <th className="p-4 font-semibold">Status</th>
+                                <th className="p-4 font-semibold">Date</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {ordersLoading ? (
+                                <tr>
+                                    <td colSpan={5} className="p-8 text-center text-slate-400">
+                                        <div className="flex items-center justify-center">
+                                            <div className="w-6 h-6 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin mr-2"/>
+                                            Loading orders...
+                                        </div>
+                                    </td>
+                                </tr>
+                            ) : orders.length === 0 ? (
+                                <tr>
+                                    <td colSpan={5} className="p-8 text-center text-slate-400">
+                                        No orders yet. Place an order in the Sales module to get started.
+                                    </td>
+                                </tr>
+                            ) : recentOrders.map((order) => (
+                                <tr key={order.id} className="hover:bg-slate-50 transition-colors">
+                                    <td className="p-4 font-medium text-slate-700">{order.id}</td>
+                                    <td className="p-4 text-slate-600">{order.clientName}</td>
+                                    <td className="p-4 text-right font-mono font-medium text-slate-800">
+                                        ${order.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                    </td>
+                                    <td className="p-4">
+                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
+                                            ['invoiced', 'delivered', 'paid'].includes(order.status.toLowerCase())
+                                                ? 'bg-green-100 text-green-700 border-green-200'
+                                                : ['processing'].includes(order.status.toLowerCase())
+                                                    ? 'bg-orange-100 text-orange-700 border-orange-200'
+                                                    : 'bg-yellow-100 text-yellow-700 border-yellow-200'
+                                        }`}>
+                                            {order.status}
+                                        </span>
+                                    </td>
+                                    <td className="p-4 text-slate-600">{new Date(order.createdAt).toLocaleDateString()}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                     <h3 className="text-lg font-semibold text-slate-800 mb-4">Payment Status Summary</h3>
                     <div className="h-64 w-full">
