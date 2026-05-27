@@ -1,11 +1,66 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MOCK_INVOICES } from '../constants';
-import { Invoice } from '../types';
-import { Filter, CheckCircle, AlertCircle, Clock } from 'lucide-react';
+import { Invoice, SalesOrder } from '../types';
+import { Filter, CheckCircle, AlertCircle, Clock, RefreshCw } from 'lucide-react';
 
-const AccountsModule: React.FC = () => {
+interface AccountsModuleProps {
+  newOrder?: SalesOrder | null;
+}
+
+const AccountsModule: React.FC<AccountsModuleProps> = ({newOrder}) => {
   const [filter, setFilter] = useState<string>('All');
-  const [invoices, setInvoices] = useState<Invoice[]>(MOCK_INVOICES);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch real orders from backend on component mount
+  useEffect(() => {
+    fetchOrders();
+  }, []);
+
+  // Refetch when new order is placed
+  useEffect(() => {
+    if (newOrder) {
+      fetchOrders();
+    }
+  }, [newOrder]);
+
+  const fetchOrders = async () => {
+    try {
+      setLoading(true);
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+      const response = await fetch(`${API_BASE}/orders`);
+      const data = await response.json();
+
+      if (data.success) {
+        // Transform orders to Invoice format
+        const transformedInvoices: Invoice[] = data.data.map((order: any) => ({
+          id: order.id,
+          clientName: order.clientName,
+          amount: order.totalAmount || 0,
+          dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from now
+          status: mapOrderStatusToInvoiceStatus(order.status)
+        }));
+
+        setInvoices(transformedInvoices);
+      }
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+      // Fallback to mock data if API fails
+      setInvoices(MOCK_INVOICES);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const mapOrderStatusToInvoiceStatus = (orderStatus: string): Invoice['status'] => {
+    switch (orderStatus.toLowerCase()) {
+      case 'pending': return 'Pending';
+      case 'processing': return 'Approved';
+      case 'invoiced': return 'Approved';
+      case 'delivered': return 'Paid';
+      default: return 'Pending';
+    }
+  };
 
   const handleStatusChange = (id: string, newStatus: Invoice['status']) => {
     setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, status: newStatus } : inv));
@@ -26,20 +81,39 @@ const AccountsModule: React.FC = () => {
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <h2 className="text-2xl font-bold text-slate-800">Accounts Payable & Receivable</h2>
-        
-        <div className="flex items-center space-x-2 bg-white p-1 rounded-lg border border-slate-200">
-          {['All', 'Paid', 'Pending', 'Overdue'].map(f => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${filter === f ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
-            >
-              {f}
-            </button>
-          ))}
+
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={fetchOrders}
+            className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50"
+            disabled={loading}
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
+          </button>
+
+          <div className="flex items-center space-x-2 bg-white p-1 rounded-lg border border-slate-200">
+            {['All', 'Paid', 'Pending', 'Overdue'].map(f => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${filter === f ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
+      {loading ? (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"/>
+            <p className="text-slate-600">Loading invoices...</p>
+          </div>
+        </div>
+      ) : (
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -93,6 +167,7 @@ const AccountsModule: React.FC = () => {
             </div>
         )}
       </div>
+      )}
     </div>
   );
 };

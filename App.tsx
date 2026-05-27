@@ -25,9 +25,9 @@ const App: React.FC = () => {
     loadInventory();
   }, []);
 
-  // Clear newOrder when switching away from distribution module
+  // Clear newOrder when switching to sales or warehouse (placing new orders)
   useEffect(() => {
-    if (activeModule !== 'distribution') {
+    if (activeModule === 'sales' || activeModule === 'warehouse') {
       setNewOrder(null);
     }
   }, [activeModule]);
@@ -70,6 +70,7 @@ const App: React.FC = () => {
     };
 
     setNewOrder(transformedOrder);
+    // Navigate to Distribution (not Accounts, since Distribution is the workflow)
     setActiveModule('distribution');
   };
 
@@ -106,7 +107,7 @@ const App: React.FC = () => {
       case 'finance':
         return <FinanceModule currentRole={currentUserRole} />;
       case 'accounts':
-        return <AccountsModule />;
+        return <AccountsModule newOrder={newOrder} />;
       case 'distribution':
         return <DistributionModule newOrder={newOrder} />;
       case 'warehouse':

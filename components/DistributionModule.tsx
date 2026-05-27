@@ -8,24 +8,66 @@ interface DistributionModuleProps {
 }
 
 const DistributionModule: React.FC<DistributionModuleProps> = ({newOrder}) => {
-  const [orders, setOrders] = useState<SalesOrder[]>(MOCK_ORDERS);
+  const [orders, setOrders] = useState<SalesOrder[]>([]);
+  const [loading, setLoading] = useState(true);
   const [signingOrder, setSigningOrder] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Add new order when provided
+  // Fetch real orders from backend on component mount
+  useEffect(() => {
+    fetchOrders();
+  }, []);
+
+  // Add new order when provided and refetch to get all orders
   useEffect(() => {
     if (newOrder) {
-      setOrders(prev => {
-        // Check if order already exists
-        const exists = prev.find(o => o.id === newOrder.id);
-        if (!exists) {
-          // Add new order at the beginning
-          return [newOrder, ...prev];
-        }
-        return prev;
-      });
+      fetchOrders();
     }
   }, [newOrder]);
+
+  const fetchOrders = async () => {
+    try {
+      setLoading(true);
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+      const response = await fetch(`${API_BASE}/orders`);
+      const data = await response.json();
+
+      if (data.success) {
+        // Transform backend orders to SalesOrder format
+        const transformedOrders: SalesOrder[] = data.data.map((order: any) => ({
+          id: order.id,
+          clientName: order.clientName,
+          items: order.items.map((item: any) => ({
+            name: item.name,
+            qty: item.quantity,
+            price: item.unitPrice || 0
+          })),
+          total: order.totalAmount || 0,
+          status: mapStatus(order.status),
+          date: order.createdAt || new Date().toISOString()
+        }));
+
+        setOrders(transformedOrders);
+      }
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+      // Fallback to mock data if API fails
+      setOrders(MOCK_ORDERS);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Map backend status to DistributionModule status
+  const mapStatus = (backendStatus: string): SalesOrder['status'] => {
+    switch (backendStatus.toLowerCase()) {
+      case 'pending': return 'SO';
+      case 'processing': return 'DO';
+      case 'invoiced': return 'Invoiced';
+      case 'delivered': return 'Delivered';
+      default: return 'SO';
+    }
+  };
 
   const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
     const canvas = canvasRef.current;
@@ -92,7 +134,19 @@ const DistributionModule: React.FC<DistributionModuleProps> = ({newOrder}) => {
   return (
     <div className="space-y-6">
        <h2 className="text-2xl font-bold text-slate-800">Distribution Workflow</h2>
-       
+
+       {loading ? (
+         <div className="flex items-center justify-center p-8">
+           <div className="text-center">
+             <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"/>
+             <p className="text-slate-600">Loading orders...</p>
+           </div>
+         </div>
+       ) : orders.length === 0 ? (
+         <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200 text-center">
+           <p className="text-slate-400">No orders yet. Place an order in the Sales module to get started.</p>
+         </div>
+       ) : (
        <div className="grid gap-6">
         {orders.map(order => (
             <div key={order.id} className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
@@ -187,6 +241,8 @@ const DistributionModule: React.FC<DistributionModuleProps> = ({newOrder}) => {
                    </div>
                </div>
            </div>
+       ))}
+       </div>
        )}
     </div>
   );
