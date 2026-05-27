@@ -315,55 +315,7 @@ const FinanceModule: React.FC<FinanceModuleProps> = ({ currentRole }) => {
                     </table>
                 </div>
             </div>
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                    <h3 className="text-lg font-semibold text-slate-800 mb-4">Payment Status Summary</h3>
-                    <div className="h-64 w-full">
-                        <ResponsiveContainer width="100%" height={256}>
-                            <BarChart data={chartData}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                <XAxis dataKey="name" />
-                                <YAxis />
-                                <Tooltip cursor={{fill: 'transparent'}} />
-                                <Bar dataKey="value" radius={[4, 4, 0, 0]} barSize={50}>
-                                    {chartData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={entry.color} />
-                                    ))}
-                                </Bar>
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
-
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                    <div className="p-4 border-b border-slate-100 bg-slate-50">
-                        <h3 className="font-semibold text-slate-800 flex items-center">
-                            <AlertCircle className="w-4 h-4 mr-2 text-red-500" /> Urgent: Overdue Items
-                        </h3>
-                    </div>
-                    <div className="overflow-y-auto max-h-64">
-                        <table className="w-full text-left text-sm">
-                            <thead className="bg-slate-50 text-slate-500 sticky top-0">
-                                <tr>
-                                    <th className="p-3 font-medium">Client</th>
-                                    <th className="p-3 font-medium">Due</th>
-                                    <th className="p-3 font-medium text-right">Amount</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {MOCK_INVOICES.filter(i => i.status === 'Overdue').map(inv => (
-                                    <tr key={inv.id}>
-                                        <td className="p-3 font-medium text-slate-700">{inv.clientName}</td>
-                                        <td className="p-3 text-red-500">{inv.dueDate}</td>
-                                        <td className="p-3 text-right font-mono">${inv.amount.toLocaleString()}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
+        );
   };
 
   const renderSalesDashboard = () => {
