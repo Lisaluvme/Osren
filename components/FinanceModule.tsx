@@ -246,7 +246,7 @@ const FinanceModule: React.FC<FinanceModuleProps> = ({ currentRole }) => {
                             <Tooltip cursor={{fill: 'transparent'}} formatter={(value) => `$${value.toLocaleString()}`} />
                             <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={40}>
                                 {chartData.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={entry.color} />
+                                    <Cell key={'cell-' + index} fill={entry.color} />
                                 ))}
                             </Bar>
                         </BarChart>
