@@ -6,7 +6,7 @@ import DistributionModule from './components/DistributionModule';
 import WarehouseModule from './components/WarehouseModule';
 import SalesModule from './components/SalesModule';
 import DeliveryModule from './components/DeliveryModule';
-import { UserRole, InventoryItem } from './types';
+import { UserRole, InventoryItem, SalesOrder } from './types';
 import inventoryService from './services/inventoryService';
 
 const App: React.FC = () => {
@@ -17,11 +17,20 @@ const App: React.FC = () => {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [inventoryLoading, setInventoryLoading] = useState(true);
   const [inventoryError, setInventoryError] = useState('');
+  // State for new order to pass to Distribution module
+  const [newOrder, setNewOrder] = useState<SalesOrder | null>(null);
 
   // Load real inventory data on mount
   useEffect(() => {
     loadInventory();
   }, []);
+
+  // Clear newOrder when switching away from distribution module
+  useEffect(() => {
+    if (activeModule !== 'distribution') {
+      setNewOrder(null);
+    }
+  }, [activeModule]);
 
   const loadInventory = async () => {
     setInventoryLoading(true);
@@ -42,6 +51,12 @@ const App: React.FC = () => {
   // Handle inventory updates from child components
   const handleInventoryChange = (newInventory: InventoryItem[]) => {
     setInventory(newInventory);
+  };
+
+  // Handle order placement - navigate to Distribution with new order
+  const handleOrderPlaced = (order: SalesOrder) => {
+    setNewOrder(order);
+    setActiveModule('distribution');
   };
 
   // Route renderer
@@ -79,11 +94,11 @@ const App: React.FC = () => {
       case 'accounts':
         return <AccountsModule />;
       case 'distribution':
-        return <DistributionModule />;
+        return <DistributionModule newOrder={newOrder} />;
       case 'warehouse':
         return <WarehouseModule inventory={inventory} onInventoryChange={handleInventoryChange} />;
       case 'sales':
-        return <SalesModule inventory={inventory} />;
+        return <SalesModule inventory={inventory} onOrderPlaced={handleOrderPlaced} />;
       case 'delivery':
         return <DeliveryModule />;
       default:

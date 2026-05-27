@@ -30,7 +30,12 @@ interface Order {
 // --- Real Business Data Analytics ---
 const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b'];
 
-const SalesModule = ({inventory}: {inventory: InventoryItem[]}) => {
+interface SalesModuleProps {
+  inventory: InventoryItem[];
+  onOrderPlaced?: (order: Order) => void;
+}
+
+const SalesModule: React.FC<SalesModuleProps> = ({inventory, onOrderPlaced}) => {
   const [clientName, setClientName] = useState('AutoSpa Elite');
   const [recommendations, setRecommendations] = useState<SalesRecommendation[]>([]);
   const [loading, setLoading] = useState(false);
@@ -185,6 +190,11 @@ const SalesModule = ({inventory}: {inventory: InventoryItem[]}) => {
 
             // Refresh recent orders
             await fetchRecentOrders();
+
+            // Call the callback to navigate to Distribution with the new order
+            if (onOrderPlaced && data.data) {
+                onOrderPlaced(data.data);
+            }
 
             // Clear cart and form after successful order
             setTimeout(() => {

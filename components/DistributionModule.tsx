@@ -1,12 +1,31 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { MOCK_ORDERS } from '../constants';
 import { SalesOrder } from '../types';
 import { ArrowRight, FileCheck, Truck, FileText, PenTool, Eraser } from 'lucide-react';
 
-const DistributionModule: React.FC = () => {
+interface DistributionModuleProps {
+  newOrder?: SalesOrder | null;
+}
+
+const DistributionModule: React.FC<DistributionModuleProps> = ({newOrder}) => {
   const [orders, setOrders] = useState<SalesOrder[]>(MOCK_ORDERS);
   const [signingOrder, setSigningOrder] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Add new order when provided
+  useEffect(() => {
+    if (newOrder) {
+      setOrders(prev => {
+        // Check if order already exists
+        const exists = prev.find(o => o.id === newOrder.id);
+        if (!exists) {
+          // Add new order at the beginning
+          return [newOrder, ...prev];
+        }
+        return prev;
+      });
+    }
+  }, [newOrder]);
 
   const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
     const canvas = canvasRef.current;
