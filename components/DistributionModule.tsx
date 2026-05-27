@@ -273,6 +273,7 @@ const DistributionModule: React.FC<DistributionModuleProps> = ({newOrder}) => {
             </div>
         ))}
        </div>
+       )}
 
        {/* Sign on Glass Modal */}
        {signingOrder && (
