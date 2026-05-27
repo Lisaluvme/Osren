@@ -243,7 +243,7 @@ const FinanceModule: React.FC<FinanceModuleProps> = ({ currentRole }) => {
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis type="number" />
                             <YAxis type="category" dataKey="name" width={30} />
-                            <Tooltip cursor={{fill: 'transparent'}} formatter={(value) => `$${value.toLocaleString()}`} />
+                            <Tooltip cursor={{fill: 'transparent'}} formatter={(value) => '$' + value.toLocaleString()} />
                             <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={40}>
                                 {chartData.map((entry, index) => (
                                     <Cell key={'cell-' + index} fill={entry.color} />
