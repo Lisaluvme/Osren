@@ -54,8 +54,22 @@ const App: React.FC = () => {
   };
 
   // Handle order placement - navigate to Distribution with new order
-  const handleOrderPlaced = (order: SalesOrder) => {
-    setNewOrder(order);
+  const handleOrderPlaced = (order: any) => {
+    // Transform order to match DistributionModule's expected SalesOrder format
+    const transformedOrder: SalesOrder = {
+      id: order.id,
+      clientName: order.clientName,
+      items: order.items.map((item: any) => ({
+        name: item.name,
+        qty: item.quantity,
+        price: item.unitPrice || 0
+      })),
+      total: order.totalAmount || 0,
+      status: 'SO', // New orders start as Sales Order
+      date: order.createdAt || new Date().toISOString()
+    };
+
+    setNewOrder(transformedOrder);
     setActiveModule('distribution');
   };
 

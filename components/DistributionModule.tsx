@@ -119,12 +119,12 @@ const DistributionModule: React.FC<DistributionModuleProps> = ({newOrder}) => {
                     {order.items.map((item, idx) => (
                         <div key={idx} className="flex justify-between text-sm mb-1">
                             <span>{item.name} <span className="text-slate-400">x{item.qty}</span></span>
-                            <span className="font-medium">${(item.price * item.qty).toFixed(2)}</span>
+                            <span className="font-medium">${((item.price || 0) * item.qty).toFixed(2)}</span>
                         </div>
                     ))}
                     <div className="flex justify-between font-bold text-slate-800 mt-2 pt-2 border-t border-slate-100">
                         <span>Total</span>
-                        <span>${order.total.toFixed(2)}</span>
+                        <span>${(order.total || 0).toFixed(2)}</span>
                     </div>
                 </div>
 
