@@ -301,8 +301,6 @@ const DistributionModule: React.FC<DistributionModuleProps> = ({newOrder}) => {
                </div>
            </div>
        )}
-       </div>
-       )}
     </div>
   );
 };
