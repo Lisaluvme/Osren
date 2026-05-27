@@ -408,14 +408,14 @@ const FinanceModule: React.FC<FinanceModuleProps> = ({ currentRole }) => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-slate-500 font-medium">Total Revenue (Oct)</h3>
+            <h3 className="text-slate-500 font-medium">Total Revenue</h3>
             <div className="p-2 bg-green-100 rounded-lg">
               <DollarSign className="w-5 h-5 text-green-600" />
             </div>
           </div>
-          <p className="text-3xl font-bold text-slate-800">$55,000</p>
-          <p className="text-sm text-green-600 flex items-center mt-2">
-            <TrendingUp className="w-4 h-4 mr-1" /> +12% from last month
+          <p className="text-3xl font-bold text-slate-800">${metrics.totalSales.toLocaleString()}</p>
+          <p className="text-sm text-slate-400 mt-2">
+            {metrics.paidOrdersCount} completed orders
           </p>
         </div>
 
@@ -426,20 +426,20 @@ const FinanceModule: React.FC<FinanceModuleProps> = ({ currentRole }) => {
               <TrendingUp className="w-5 h-5 text-blue-600" />
             </div>
           </div>
-          <p className="text-3xl font-bold text-slate-800">$20,000</p>
-          <p className="text-sm text-slate-400 mt-2">Before taxes</p>
+          <p className="text-3xl font-bold text-slate-800">${Math.round(metrics.totalSales * 0.4).toLocaleString()}</p>
+          <p className="text-sm text-slate-400 mt-2">Est. 40% of revenue</p>
         </div>
 
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-slate-500 font-medium">Expenses</h3>
-            <div className="p-2 bg-red-100 rounded-lg">
-              <TrendingDown className="w-5 h-5 text-red-600" />
+            <h3 className="text-slate-500 font-medium">Pending Orders</h3>
+            <div className="p-2 bg-yellow-100 rounded-lg">
+              <Clock className="w-5 h-5 text-yellow-600" />
             </div>
           </div>
-          <p className="text-3xl font-bold text-slate-800">$35,000</p>
-          <p className="text-sm text-red-500 flex items-center mt-2">
-            <TrendingDown className="w-4 h-4 mr-1" /> -5% (Cost saving)
+          <p className="text-3xl font-bold text-slate-800">${metrics.pendingAmount.toLocaleString()}</p>
+          <p className="text-sm text-slate-400 mt-2">
+            {metrics.pendingOrdersCount} orders pending
           </p>
         </div>
       </div>
@@ -448,7 +448,7 @@ const FinanceModule: React.FC<FinanceModuleProps> = ({ currentRole }) => {
       <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 h-96">
         <h3 className="text-lg font-semibold text-slate-800 mb-6">Cash Flow Analysis</h3>
         <ResponsiveContainer width="100%" height={384}>
-          <AreaChart data={MOCK_CASHFLOW}>
+          <AreaChart data={generateCashflowFromOrders(orders)}>
             <defs>
               <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
