@@ -1,5 +1,7 @@
 // Real business data service for operations
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+// Use Netlify Functions in production, localhost for development
+const API_BASE = import.meta.env.VITE_API_BASE_URL ||
+  (window.location.hostname === 'localhost' ? 'http://localhost:5000/api' : '/.netlify/functions');
 
 export interface SalesData {
   period: string;

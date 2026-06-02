@@ -8,7 +8,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "backend": "cd backend && npm run dev",
-    "backend:start": "cd backend && npm start"
+    "backend:start": "cd backend && npm start",
+    "netlify": "netlify dev",
+    "netlify:build": "netlify build"
   },
   "dependencies": {
     "@google/genai": "^1.30.0",

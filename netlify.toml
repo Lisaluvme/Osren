@@ -5,10 +5,14 @@
 [build.environment]
   NODE_VERSION = "18"
 
+# Netlify Functions configuration
+[functions]
+  node_version = "18"
+
 # Environment variables can be set in Netlify dashboard
 # REACT_APP_API_BASE_URL = "https://your-backend-url.onrender.com/api"
 
-# Redirects for SPA routing
+# Redirects for SPA routing (must be after API redirects)
 [[redirects]]
   from = "/*"
   to = "/index.html"
@@ -28,3 +32,9 @@
   for = "/assets/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
+
+# Cache control for Netlify Functions
+[[headers]]
+  for = "/.netlify/functions/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
