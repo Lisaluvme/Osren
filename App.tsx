@@ -7,6 +7,7 @@ import WarehouseModule from './components/WarehouseModule';
 import SalesModule from './components/SalesModule';
 import DeliveryModule from './components/DeliveryModule';
 import ChatbotModule from './components/ChatbotModule';
+import FloatingChatbot from './components/FloatingChatbot';
 import { UserRole, InventoryItem, SalesOrder } from './types';
 import inventoryService from './services/inventoryService';
 
@@ -125,14 +126,17 @@ const App: React.FC = () => {
   };
 
   return (
-    <Layout
-      currentRole={currentUserRole}
-      onRoleChange={setCurrentUserRole}
-      activeModule={activeModule}
-      onModuleChange={setActiveModule}
-    >
-      {renderModule()}
-    </Layout>
+    <>
+      <Layout
+        currentRole={currentUserRole}
+        onRoleChange={setCurrentUserRole}
+        activeModule={activeModule}
+        onModuleChange={setActiveModule}
+      >
+        {renderModule()}
+      </Layout>
+      <FloatingChatbot />
+    </>
   );
 };
 
