@@ -22,7 +22,7 @@ interface ChatResponse {
 class GrokService {
   private apiKey: string;
   private baseUrl: string = 'https://api.groq.com/openai/v1';
-  private model: string = 'groq-llama-3.3-70b-8192'; // Using Llama 3.3 via Groq as alternative to Grok
+  private model: string = 'llama-3.3-70b-versatile'; // Using Llama 3.3 via Groq
 
   constructor(apiKey: string) {
     this.apiKey = apiKey;
