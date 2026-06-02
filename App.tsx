@@ -6,6 +6,7 @@ import DistributionModule from './components/DistributionModule';
 import WarehouseModule from './components/WarehouseModule';
 import SalesModule from './components/SalesModule';
 import DeliveryModule from './components/DeliveryModule';
+import ChatbotModule from './components/ChatbotModule';
 import { UserRole, InventoryItem, SalesOrder } from './types';
 import inventoryService from './services/inventoryService';
 
@@ -116,6 +117,8 @@ const App: React.FC = () => {
         return <SalesModule inventory={inventory} onOrderPlaced={handleOrderPlaced} />;
       case 'delivery':
         return <DeliveryModule />;
+      case 'chatbot':
+        return <ChatbotModule />;
       default:
         return <WarehouseModule inventory={inventory} onInventoryChange={handleInventoryChange} />;
     }

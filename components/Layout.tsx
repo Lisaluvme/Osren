@@ -1,17 +1,18 @@
 import React from 'react';
 import { MENU_ITEMS } from '../constants';
 import { UserRole } from '../types';
-import { 
-  PieChart, 
-  FileText, 
-  Workflow, 
-  Package, 
-  Briefcase, 
+import {
+  PieChart,
+  FileText,
+  Workflow,
+  Package,
+  Briefcase,
   Truck,
   Menu,
   X,
   User,
-  LogOut
+  LogOut,
+  MessageSquare
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -23,7 +24,7 @@ interface LayoutProps {
 }
 
 const IconMap: Record<string, React.FC<any>> = {
-  PieChart, FileText, Workflow, Package, Briefcase, Truck
+  PieChart, FileText, Workflow, Package, Briefcase, Truck, MessageSquare
 };
 
 const Layout: React.FC<LayoutProps> = ({ 
