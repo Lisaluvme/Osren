@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { getStockPurchaseRecommendation } from '../services/geminiService';
 import { UserRole, Invoice } from '../types';
 import {
-  TrendingUp, TrendingDown, DollarSign, BrainCircuit,
+  TrendingUp, TrendingDown, DollarSign,
   AlertCircle, Clock, Target, Users, Activity, CreditCard, ShoppingCart, Package, RefreshCw
 } from 'lucide-react';
 import {
@@ -23,8 +22,6 @@ interface RealOrder {
 }
 
 const FinanceModule: React.FC<FinanceModuleProps> = ({ currentRole }) => {
-  const [recommendation, setRecommendation] = useState<string>('Analyzing market data...');
-  const [loading, setLoading] = useState(false);
   const [orders, setOrders] = useState<RealOrder[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(true);
   const [inventory, setInventory] = useState<any[]>([]);
@@ -33,25 +30,6 @@ const FinanceModule: React.FC<FinanceModuleProps> = ({ currentRole }) => {
   useEffect(() => {
     fetchRealData();
   }, []);
-
-  // AI Recommendation only fetches for Admin to save tokens/resources
-  useEffect(() => {
-    if (currentRole === UserRole.ADMIN || currentRole === UserRole.WAREHOUSE) {
-      const fetchAdvice = async () => {
-        setLoading(true);
-        const advice = await getStockPurchaseRecommendation(
-          // Generate real cashflow from orders
-          generateCashflowFromOrders(orders),
-          inventory
-        );
-        setRecommendation(advice);
-        setLoading(false);
-      };
-      if (orders.length > 0 || inventory.length > 0) {
-        fetchAdvice();
-      }
-    }
-  }, [currentRole, orders, inventory]);
 
   const fetchRealData = async () => {
     try {
@@ -467,31 +445,6 @@ const FinanceModule: React.FC<FinanceModuleProps> = ({ currentRole }) => {
             <Area type="monotone" dataKey="expenses" stroke="#ef4444" fillOpacity={1} fill="url(#colorExp)" />
           </AreaChart>
         </ResponsiveContainer>
-      </div>
-
-      {/* AI Widget */}
-      <div className="bg-gradient-to-r from-indigo-900 to-slate-900 rounded-xl p-6 text-white shadow-lg relative overflow-hidden">
-        <div className="absolute top-0 right-0 p-4 opacity-10">
-          <BrainCircuit className="w-32 h-32" />
-        </div>
-        <div className="relative z-10">
-            <div className="flex items-center mb-2">
-                <BrainCircuit className="w-6 h-6 mr-2 text-yellow-400" />
-                <h3 className="text-lg font-semibold">AI Stock Purchase Recommendation</h3>
-            </div>
-            <div className="mb-4 flex gap-2">
-               <span className="text-[10px] bg-indigo-800 text-indigo-200 px-2 py-0.5 rounded border border-indigo-700">Cash Flow</span>
-               <span className="text-[10px] bg-indigo-800 text-indigo-200 px-2 py-0.5 rounded border border-indigo-700">Inventory Age (Last Moved)</span>
-            </div>
-            {loading ? (
-                <div className="space-y-2 animate-pulse">
-                    <div className="h-4 bg-white/10 rounded w-3/4"></div>
-                    <div className="h-4 bg-white/10 rounded w-1/2"></div>
-                </div>
-            ) : (
-                <p className="text-indigo-100 text-lg leading-relaxed">{recommendation}</p>
-            )}
-        </div>
       </div>
     </div>
   );
