@@ -89,10 +89,9 @@ const DeliveryModule: React.FC = () => {
   const openMapNavigation = (stop: DeliveryStop) => {
     // Use the actual address from the order for Google Maps navigation
     const address = stop.address;
-    const clientName = stop.clientName;
 
     // Open Google Maps with the actual address for navigation
-    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address + ' ' + clientName)}`;
+    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
     window.open(mapsUrl, '_blank');
   };
 
