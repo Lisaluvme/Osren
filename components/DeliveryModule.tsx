@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { optimizeRouteSequence } from '../services/geminiService';
 import { DeliveryRoute } from '../types';
-import { MapPin, Navigation, Compass, Layers, Package, RefreshCw, Clock, Phone } from 'lucide-react';
+import { MapPin, Navigation, Compass, Layers, Package, RefreshCw, Clock, Phone, PenTool, Eraser, FileText } from 'lucide-react';
 
 interface Order {
   id: string;
@@ -25,6 +25,8 @@ const DeliveryModule: React.FC = () => {
   const [deliveries, setDeliveries] = useState<DeliveryStop[]>([]);
   const [loading, setLoading] = useState(true);
   const [optimizing, setOptimizing] = useState(false);
+  const [signingOrder, setSigningOrder] = useState<string | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Load real orders with delivery addresses
   useEffect(() => {
@@ -95,27 +97,91 @@ const DeliveryModule: React.FC = () => {
     window.open(mapsUrl, '_blank');
   };
 
-  const markAsDelivered = async (deliveryId: string) => {
-    try {
-      const stop = deliveries.find(d => d.id === deliveryId);
-      if (!stop) return;
+  const markAsDelivered = (deliveryId: string) => {
+    // Open signature modal instead of directly marking as delivered
+    setSigningOrder(deliveryId);
+    // Wait for render then clear if needed
+    setTimeout(() => clearSignature(), 100);
+  };
 
-      const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+  const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
-      // Update order status to delivered
-      await fetch(`${API_BASE}/orders/${stop.originalOrder.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'delivered' })
-      });
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#000';
 
-      // Update local state
-      setDeliveries(prev => prev.map(d =>
-        d.id === deliveryId ? { ...d, status: 'Delivered' } : d
-      ));
-    } catch (error) {
-      console.error('Failed to mark as delivered:', error);
-    }
+    const rect = canvas.getBoundingClientRect();
+    const x = ('touches' in e ? e.touches[0].clientX : e.clientX) - rect.left;
+    const y = ('touches' in e ? e.touches[0].clientY : e.clientY) - rect.top;
+
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+
+    const moveHandler = (moveEvent: MouseEvent | TouchEvent) => {
+       const mx = ('touches' in moveEvent ? moveEvent.touches[0].clientX : (moveEvent as MouseEvent).clientX) - rect.left;
+       const my = ('touches' in moveEvent ? moveEvent.touches[0].clientY : (moveEvent as MouseEvent).clientY) - rect.top;
+       ctx.lineTo(mx, my);
+       ctx.stroke();
+    };
+
+    const upHandler = () => {
+       document.removeEventListener('mousemove', moveHandler);
+       document.removeEventListener('mouseup', upHandler);
+       document.removeEventListener('touchmove', moveHandler);
+       document.removeEventListener('touchend', upHandler);
+    };
+
+    document.addEventListener('mousemove', moveHandler);
+    document.addEventListener('mouseup', upHandler);
+    document.addEventListener('touchmove', moveHandler);
+    document.addEventListener('touchend', upHandler);
+  };
+
+  const clearSignature = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+  };
+
+  const saveSignature = async () => {
+     if (signingOrder && canvasRef.current) {
+         const dataUrl = canvasRef.current.toDataURL();
+
+         try {
+           const stop = deliveries.find(d => d.id === signingOrder);
+           if (!stop) return;
+
+           const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+
+           console.log('🔄 [Save Signature] Updating order status to Invoiced:', stop.originalOrder.id);
+
+           const response = await fetch(`${API_BASE}/orders/${stop.originalOrder.id}`, {
+             method: 'PATCH',
+             headers: { 'Content-Type': 'application/json' },
+             body: JSON.stringify({ status: 'invoiced', signature: dataUrl })
+           });
+
+           const data = await response.json();
+           console.log('✅ Signature saved response:', data);
+
+           if (data.success) {
+             // Remove from local deliveries since it's now invoiced
+             setDeliveries(prev => prev.filter(d => d.id !== signingOrder));
+             setSigningOrder(null);
+           } else {
+             console.error('❌ Failed to save signature:', data.error);
+             alert('Failed to save signature. Please try again.');
+           }
+         } catch (error) {
+           console.error('❌ Error saving signature:', error);
+           alert('Failed to save signature. Please try again.');
+         }
+     }
   };
 
   return (
@@ -244,9 +310,9 @@ const DeliveryModule: React.FC = () => {
                                             {stop.status !== 'Delivered' && (
                                                 <button
                                                     onClick={() => markAsDelivered(stop.id)}
-                                                    className="flex items-center text-green-600 hover:text-green-800 text-sm font-medium bg-green-50 px-3 py-1.5 rounded transition-colors"
+                                                    className="flex items-center text-orange-600 hover:text-orange-800 text-sm font-medium bg-orange-50 px-3 py-1.5 rounded transition-colors"
                                                 >
-                                                    Mark Delivered
+                                                    <PenTool className="w-4 h-4 mr-1.5" /> Sign & Invoice
                                                 </button>
                                             )}
                                             <button
@@ -309,6 +375,33 @@ const DeliveryModule: React.FC = () => {
                             Click "Navigate" on any delivery to open Google Maps with the exact address from the customer's order.
                             The navigation will follow the real delivery addresses provided by customers.
                         </p>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* Sign on Glass Modal */}
+        {signingOrder && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+                    <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                        <h3 className="font-bold text-slate-800">Sign Delivery Order</h3>
+                        <button onClick={() => setSigningOrder(null)} className="text-slate-400 hover:text-slate-600"><Eraser className="w-5 h-5" /></button>
+                    </div>
+                    <div className="p-4 bg-white relative">
+                        <p className="text-xs text-slate-400 mb-2">Please sign below to accept delivery and generate invoice.</p>
+                        <canvas
+                            ref={canvasRef}
+                            width={350}
+                            height={200}
+                            className="border-2 border-dashed border-slate-300 rounded-lg bg-slate-50 touch-none w-full"
+                            onMouseDown={startDrawing}
+                            onTouchStart={startDrawing}
+                        />
+                    </div>
+                    <div className="p-4 border-t border-slate-100 flex justify-between space-x-4">
+                        <button onClick={clearSignature} className="flex-1 py-2 text-slate-600 font-medium hover:bg-slate-100 rounded-lg">Clear</button>
+                        <button onClick={saveSignature} className="flex-1 py-2 bg-blue-600 text-white font-medium hover:bg-blue-700 rounded-lg shadow-md shadow-blue-200">Confirm & Invoice</button>
                     </div>
                 </div>
             </div>

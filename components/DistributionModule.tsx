@@ -74,7 +74,9 @@ const DistributionModule: React.FC<DistributionModuleProps> = ({newOrder}) => {
       case 'pending': return 'SO';
       case 'processing': return 'DO';
       case 'invoiced': return 'Invoiced';
+      case 'paid': return 'Completed';
       case 'delivered': return 'Delivered';
+      case 'completed': return 'Delivered';
       default: return 'SO';
     }
   };
@@ -85,6 +87,7 @@ const DistributionModule: React.FC<DistributionModuleProps> = ({newOrder}) => {
       case 'SO': return 'pending';
       case 'DO': return 'processing';
       case 'Invoiced': return 'invoiced';
+      case 'Completed': return 'paid';
       case 'Delivered': return 'delivered';
       default: return 'pending';
     }
@@ -207,11 +210,6 @@ const DistributionModule: React.FC<DistributionModuleProps> = ({newOrder}) => {
             console.error('❌ Error updating status:', error);
             alert(`Failed to update status: ${error.message}`);
           }
-      } else if (currentStatus === 'DO') {
-          console.log('🖊️ Opening signature modal for order:', id);
-          setSigningOrder(id);
-          // Wait for render then clear if needed
-          setTimeout(() => clearSignature(), 100);
       }
   };
 
@@ -262,7 +260,7 @@ const DistributionModule: React.FC<DistributionModuleProps> = ({newOrder}) => {
                     ))}
                     <div className="flex justify-between font-bold text-slate-800 mt-2 pt-2 border-t border-slate-100">
                         <span>Total</span>
-                        <span>${(order.total || 0).toFixed(2)}</span>
+                        <span>RM{(order.total || 0).toFixed(2)}</span>
                     </div>
                 </div>
 
@@ -283,14 +281,16 @@ const DistributionModule: React.FC<DistributionModuleProps> = ({newOrder}) => {
                         </button>
                     )}
                     {order.status === 'DO' && (
-                        <button 
-                            onClick={() => advanceStatus(order.id, 'DO')}
-                            className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center"
-                        >
-                            <PenTool className="w-4 h-4 mr-2" /> Sign & Invoice
+                        <button disabled className="bg-blue-100 text-blue-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center cursor-default border border-blue-200">
+                            <Truck className="w-4 h-4 mr-2" /> In Delivery
                         </button>
                     )}
                     {order.status === 'Invoiced' && (
+                        <button disabled className="bg-yellow-100 text-yellow-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center cursor-default border border-yellow-200">
+                            <FileText className="w-4 h-4 mr-2" /> Invoiced - Awaiting Payment
+                        </button>
+                    )}
+                    {order.status === 'Completed' && (
                         <button disabled className="bg-green-100 text-green-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center cursor-default border border-green-200">
                             <CheckCircle className="w-4 h-4 mr-2" /> Completed
                         </button>
@@ -304,33 +304,6 @@ const DistributionModule: React.FC<DistributionModuleProps> = ({newOrder}) => {
             </div>
         ))}
        </div>
-       )}
-
-       {/* Sign on Glass Modal */}
-       {signingOrder && (
-           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-               <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-                   <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                       <h3 className="font-bold text-slate-800">Sign Delivery Order</h3>
-                       <button onClick={() => setSigningOrder(null)} className="text-slate-400 hover:text-slate-600"><Eraser className="w-5 h-5" /></button>
-                   </div>
-                   <div className="p-4 bg-white relative">
-                       <p className="text-xs text-slate-400 mb-2">Please sign below to accept delivery.</p>
-                       <canvas 
-                            ref={canvasRef}
-                            width={350} 
-                            height={200} 
-                            className="border-2 border-dashed border-slate-300 rounded-lg bg-slate-50 touch-none w-full"
-                            onMouseDown={startDrawing}
-                            onTouchStart={startDrawing}
-                       />
-                   </div>
-                   <div className="p-4 border-t border-slate-100 flex justify-between space-x-4">
-                       <button onClick={clearSignature} className="flex-1 py-2 text-slate-600 font-medium hover:bg-slate-100 rounded-lg">Clear</button>
-                       <button onClick={saveSignature} className="flex-1 py-2 bg-blue-600 text-white font-medium hover:bg-blue-700 rounded-lg shadow-md shadow-blue-200">Confirm Signature</button>
-                   </div>
-               </div>
-           </div>
        )}
     </div>
   );
