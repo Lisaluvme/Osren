@@ -295,6 +295,11 @@ const DistributionModule: React.FC<DistributionModuleProps> = ({newOrder}) => {
                             <CheckCircle className="w-4 h-4 mr-2" /> Completed
                         </button>
                     )}
+                    {order.status === 'Delivered' && (
+                        <button disabled className="bg-green-100 text-green-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center cursor-default border border-green-200">
+                            <CheckCircle className="w-4 h-4 mr-2" /> Delivered
+                        </button>
+                    )}
                 </div>
             </div>
         ))}

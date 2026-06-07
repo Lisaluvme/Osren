@@ -35,8 +35,8 @@ const DeliveryModule: React.FC = () => {
     setLoading(true);
     try {
       const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
-      // Fetch both pending (SO) and processing (DO) orders for delivery
-      const response = await fetch(`${API_BASE}/orders?status=pending,processing`);
+      // Only fetch processing (DO) orders for delivery
+      const response = await fetch(`${API_BASE}/orders?status=processing`);
       const data = await response.json();
 
       if (data.success) {
@@ -102,11 +102,11 @@ const DeliveryModule: React.FC = () => {
 
       const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
-      // Update order status to completed
+      // Update order status to delivered
       await fetch(`${API_BASE}/orders/${stop.originalOrder.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'completed' })
+        body: JSON.stringify({ status: 'delivered' })
       });
 
       // Update local state
