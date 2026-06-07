@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Invoice, SalesOrder } from '../types';
-import { Filter, CheckCircle, AlertCircle, Clock, RefreshCw } from 'lucide-react';
+import { Filter, CheckCircle, AlertCircle, Clock, RefreshCw, DollarSign } from 'lucide-react';
 
 interface AccountsModuleProps {
   newOrder?: SalesOrder | null;
@@ -57,13 +57,51 @@ const AccountsModule: React.FC<AccountsModuleProps> = ({newOrder}) => {
       case 'pending': return 'Pending';
       case 'processing': return 'Approved';
       case 'invoiced': return 'Approved';
+      case 'paid': return 'Paid';
       case 'delivered': return 'Paid';
+      case 'completed': return 'Paid';
       default: return 'Pending';
     }
   };
 
-  const handleStatusChange = (id: string, newStatus: Invoice['status']) => {
-    setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, status: newStatus } : inv));
+  const handleStatusChange = async (id: string, newStatus: Invoice['status']) => {
+    try {
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+
+      // Map invoice status back to order status
+      const orderStatus = mapInvoiceStatusToOrderStatus(newStatus);
+
+      // Update backend
+      const response = await fetch(`${API_BASE}/orders/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: orderStatus })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Update local state
+        setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, status: newStatus } : inv));
+        console.log(`✅ Updated invoice ${id} to ${newStatus}`);
+      } else {
+        console.error('❌ Failed to update status:', data.error);
+        alert('Failed to update status. Please try again.');
+      }
+    } catch (error) {
+      console.error('❌ Error updating status:', error);
+      alert('Failed to update status. Please try again.');
+    }
+  };
+
+  const mapInvoiceStatusToOrderStatus = (invoiceStatus: Invoice['status']): string => {
+    switch (invoiceStatus) {
+      case 'Pending': return 'pending';
+      case 'Approved': return 'processing';
+      case 'Paid': return 'paid';
+      case 'Overdue': return 'invoiced';
+      default: return 'pending';
+    }
   };
 
   const filteredInvoices = filter === 'All' ? invoices : invoices.filter(inv => inv.status === filter);
@@ -124,7 +162,7 @@ const AccountsModule: React.FC<AccountsModuleProps> = ({newOrder}) => {
                 <th className="p-4 font-semibold">Due Date</th>
                 <th className="p-4 font-semibold text-right">Amount</th>
                 <th className="p-4 font-semibold text-center">Status</th>
-                <th className="p-4 font-semibold text-center">Action</th>
+                <th className="p-4 font-semibold text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -134,7 +172,7 @@ const AccountsModule: React.FC<AccountsModuleProps> = ({newOrder}) => {
                   <td className="p-4 text-slate-600">{inv.clientName}</td>
                   <td className="p-4 text-slate-600">{inv.dueDate}</td>
                   <td className="p-4 text-right font-mono font-medium text-slate-800">
-                    ${inv.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    RM {inv.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </td>
                   <td className="p-4 text-center">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(inv.status)}`}>
@@ -145,16 +183,29 @@ const AccountsModule: React.FC<AccountsModuleProps> = ({newOrder}) => {
                     </span>
                   </td>
                   <td className="p-4 text-center">
-                    <select
-                      value={inv.status}
-                      onChange={(e) => handleStatusChange(inv.id, e.target.value as Invoice['status'])}
-                      className="text-xs bg-white border border-slate-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 outline-none"
-                    >
-                      <option value="Pending">Pending</option>
-                      <option value="Approved">Approved</option>
-                      <option value="Paid">Paid</option>
-                      <option value="Overdue">Overdue</option>
-                    </select>
+                    <div className="flex items-center justify-center gap-1">
+                      {inv.status !== 'Paid' && (
+                        <>
+                          {inv.status !== 'Approved' && (
+                            <button
+                              onClick={() => handleStatusChange(inv.id, 'Approved')}
+                              className="px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition-colors"
+                            >
+                              Approve
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleStatusChange(inv.id, 'Paid')}
+                            className="px-2 py-1 text-xs font-medium text-green-600 bg-green-50 hover:bg-green-100 rounded border border-green-200 transition-colors"
+                          >
+                            Mark Paid
+                          </button>
+                        </>
+                      )}
+                      {inv.status === 'Paid' && (
+                        <span className="text-xs text-green-600 font-medium">✓ Paid</span>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
