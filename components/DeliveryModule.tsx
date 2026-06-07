@@ -35,7 +35,8 @@ const DeliveryModule: React.FC = () => {
     setLoading(true);
     try {
       const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
-      const response = await fetch(`${API_BASE}/orders?status=pending`);
+      // Fetch both pending (SO) and processing (DO) orders for delivery
+      const response = await fetch(`${API_BASE}/orders?status=pending,processing`);
       const data = await response.json();
 
       if (data.success) {
@@ -49,7 +50,7 @@ const DeliveryModule: React.FC = () => {
             clientName: order.clientName,
             address: order.deliveryAddress || '',
             orderId: order.id,
-            status: order.status === 'pending' ? 'Pending' : order.status,
+            status: order.status === 'processing' ? 'Ready for Delivery' : order.status === 'pending' ? 'Pending' : order.status,
             lat: 0, // Will be calculated for navigation
             lng: 0, // Will be calculated for navigation
             originalOrder: order,
@@ -202,6 +203,7 @@ const DeliveryModule: React.FC = () => {
                                         </div>
                                         <span className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wide ${
                                             stop.status === 'Delivered' ? 'bg-green-100 text-green-700' :
+                                            stop.status === 'Ready for Delivery' ? 'bg-blue-100 text-blue-700' :
                                             stop.status === 'In Transit' ? 'bg-blue-100 text-blue-700' :
                                             'bg-yellow-100 text-yellow-700'
                                         }`}>
