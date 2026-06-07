@@ -43,6 +43,8 @@ const SalesModule: React.FC<SalesModuleProps> = ({inventory, onOrderPlaced}) => 
 
   // Order form state
   const [orderFormData, setOrderFormData] = useState({
+    customerName: '',
+    adminName: '',
     deliveryAddress: '',
     contactNumber: '',
     notes: ''
@@ -147,6 +149,13 @@ const SalesModule: React.FC<SalesModuleProps> = ({inventory, onOrderPlaced}) => 
         return;
     }
 
+    // Validate required fields
+    if (!orderFormData.customerName || !orderFormData.adminName) {
+        setOrderError('Please fill in Customer Name and Admin Name fields.');
+        setTimeout(() => setOrderError(''), 3000);
+        return;
+    }
+
     setOrderLoading(true);
     setOrderError('');
 
@@ -159,7 +168,8 @@ const SalesModule: React.FC<SalesModuleProps> = ({inventory, onOrderPlaced}) => 
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                clientName,
+                clientName: orderFormData.customerName,
+                adminName: orderFormData.adminName,
                 items: cart.map(item => ({
                     name: item.name,
                     quantity: item.qty
@@ -190,6 +200,8 @@ const SalesModule: React.FC<SalesModuleProps> = ({inventory, onOrderPlaced}) => 
                 setOrderSuccess(false);
                 setShowOrderForm(false);
                 setOrderFormData({
+                    customerName: '',
+                    adminName: '',
                     deliveryAddress: '',
                     contactNumber: '',
                     notes: ''
@@ -417,6 +429,33 @@ const SalesModule: React.FC<SalesModuleProps> = ({inventory, onOrderPlaced}) => 
                            <FileText className="w-4 h-4 mr-2" /> Order Details
                        </h4>
                        <div className="space-y-3">
+                           <div>
+                               <label className="block text-xs font-medium text-slate-700 mb-1">Customer Name *</label>
+                               <input
+                                   type="text"
+                                   value={orderFormData.customerName}
+                                   onChange={(e) => setOrderFormData({...orderFormData, customerName: e.target.value})}
+                                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                   placeholder="Enter customer name"
+                                   required
+                               />
+                           </div>
+                           <div>
+                               <label className="block text-xs font-medium text-slate-700 mb-1">Admin Name (Who placed this order) *</label>
+                               <select
+                                   value={orderFormData.adminName}
+                                   onChange={(e) => setOrderFormData({...orderFormData, adminName: e.target.value})}
+                                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                   required
+                               >
+                                   <option value="">Select admin name...</option>
+                                   <option value="Admin/Management">Admin/Management</option>
+                                   <option value="Accounts Officer">Accounts Officer</option>
+                                   <option value="Sales Rep">Sales Rep</option>
+                                   <option value="Warehouse Manager">Warehouse Manager</option>
+                                   <option value="Logistics/Driver">Logistics/Driver</option>
+                               </select>
+                           </div>
                            <div>
                                <label className="block text-xs font-medium text-slate-700 mb-1">Delivery Address</label>
                                <input
