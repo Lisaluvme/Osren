@@ -299,6 +299,9 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
                             <th className="px-6 py-3 font-medium text-center">Min Level</th>
                             <th className="px-6 py-3 font-medium text-center">Status</th>
                             <th className="px-6 py-3 font-medium">Category</th>
+                            <th className="px-6 py-3 font-medium text-right">Unit Cost</th>
+                            <th className="px-6 py-3 font-medium text-right">Selling Price</th>
+                            <th className="px-6 py-3 font-medium text-right">Profit</th>
                             <th className="px-6 py-3 font-medium text-center">Actions</th>
                         </tr>
                     </thead>
@@ -353,6 +356,20 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
                                         )}
                                     </td>
                                     <td className="px-6 py-4 text-sm text-slate-500">{item.category}</td>
+                                    <td className="px-6 py-4 text-right text-sm text-slate-600 font-mono">
+                                        ${(item.unitCost || 0).toFixed(2)}
+                                    </td>
+                                    <td className="px-6 py-4 text-right text-sm font-semibold text-slate-800 font-mono">
+                                        ${(item.sellingPrice || 0).toFixed(2)}
+                                    </td>
+                                    <td className="px-6 py-4 text-right text-sm font-mono">
+                                        <span className={`font-semibold ${
+                                            (item.profit || 0) > 0 ? 'text-green-600' :
+                                            (item.profit || 0) < 0 ? 'text-red-600' : 'text-slate-500'
+                                        }`}>
+                                            ${((item.profit || 0)).toFixed(2)}
+                                        </span>
+                                    </td>
                                     <td className="px-6 py-4 text-center">
                                         <div className="flex items-center justify-center space-x-1">
                                             <button

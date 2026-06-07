@@ -33,3 +33,6 @@ osren-app-*.json
 *.njsproj
 *.sln
 *.sw?
+
+# Local Netlify folder
+.netlify
