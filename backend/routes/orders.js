@@ -344,9 +344,10 @@ router.get('/', async (req, res) => {
 
     let filteredOrders = [...allOrders];
 
-    // Filter by status
+    // Filter by status (supports multiple statuses separated by comma)
     if (status) {
-      filteredOrders = filteredOrders.filter(order => order.status === status);
+      const statuses = status.split(',').map(s => s.trim().toLowerCase());
+      filteredOrders = filteredOrders.filter(order => statuses.includes(order.status.toLowerCase()));
     }
 
     // Filter by client
