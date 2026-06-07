@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { InventoryItem } from '../types';
-import { getDemandPrediction } from '../services/geminiService';
-import { AlertTriangle, Package, Zap, Upload, Download, Search, Filter, Plus, Minus, ShoppingCart, RefreshCw, Cloud } from 'lucide-react';
+import { AlertTriangle, Package, Upload, Download, Search, Filter, Plus, Minus, ShoppingCart, RefreshCw, Cloud } from 'lucide-react';
 import { readExcel, writeExcel } from '../services/excelService';
 import inventoryApiService from '../services/api/inventoryApi';
 
@@ -11,8 +10,6 @@ interface WarehouseModuleProps {
 }
 
 const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventoryChange}) => {
-  const [prediction, setPrediction] = useState<string>('Analyzing demand patterns...');
-  const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [searchTerm, setSearchTerm] = useState('');
@@ -37,16 +34,6 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
       setSyncing(false);
     }
   }, [onInventoryChange]);
-
-  useEffect(() => {
-    const fetchPrediction = async () => {
-        setLoading(true);
-        const result = await getDemandPrediction(inventory);
-        setPrediction(result);
-        setLoading(false);
-    };
-    fetchPrediction();
-  }, [inventory]);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -185,23 +172,6 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
             </div>
         </div>
 
-        {/* AI Prediction Card */}
-        <div className="bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-200 rounded-xl p-6 shadow-sm">
-            <div className="flex items-start">
-                <div className="p-2 bg-orange-100 rounded-lg mr-4">
-                    <Zap className="w-6 h-6 text-orange-600" />
-                </div>
-                <div className="flex-1">
-                    <h3 className="text-lg font-bold text-slate-800 mb-1">AI Demand Prediction Engine</h3>
-                    {loading ? (
-                        <div className="h-4 bg-orange-200 rounded w-3/4 animate-pulse mt-2"></div>
-                    ) : (
-                        <p className="text-slate-700 text-sm leading-relaxed">{prediction}</p>
-                    )}
-                </div>
-            </div>
-        </div>
-
         {/* Enhanced Inventory Management */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
             {/* Header with Search and Controls */}
@@ -299,9 +269,7 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
                             <th className="px-6 py-3 font-medium text-center">Min Level</th>
                             <th className="px-6 py-3 font-medium text-center">Status</th>
                             <th className="px-6 py-3 font-medium">Category</th>
-                            <th className="px-6 py-3 font-medium text-right">Unit Cost</th>
                             <th className="px-6 py-3 font-medium text-right">Selling Price</th>
-                            <th className="px-6 py-3 font-medium text-right">Profit</th>
                             <th className="px-6 py-3 font-medium text-center">Actions</th>
                         </tr>
                     </thead>
@@ -356,19 +324,8 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
                                         )}
                                     </td>
                                     <td className="px-6 py-4 text-sm text-slate-500">{item.category}</td>
-                                    <td className="px-6 py-4 text-right text-sm text-slate-600 font-mono">
-                                        ${(item.unitCost || 0).toFixed(2)}
-                                    </td>
                                     <td className="px-6 py-4 text-right text-sm font-semibold text-slate-800 font-mono">
                                         ${(item.sellingPrice || 0).toFixed(2)}
-                                    </td>
-                                    <td className="px-6 py-4 text-right text-sm font-mono">
-                                        <span className={`font-semibold ${
-                                            (item.profit || 0) > 0 ? 'text-green-600' :
-                                            (item.profit || 0) < 0 ? 'text-red-600' : 'text-slate-500'
-                                        }`}>
-                                            ${((item.profit || 0)).toFixed(2)}
-                                        </span>
                                     </td>
                                     <td className="px-6 py-4 text-center">
                                         <div className="flex items-center justify-center space-x-1">
