@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageSquare, X, Send, Bot, User, Loader2, Minimize2 } from 'lucide-react';
+import { MessageSquare, X, Send, Bot, User, Loader2, Minimize2, Phone } from 'lucide-react';
 import grokService from '../services/grokService';
 
 interface Message {
@@ -16,7 +16,7 @@ const FloatingChatbot: React.FC = () => {
     {
       id: '1',
       role: 'assistant',
-      content: 'Hello! I\'m your AI assistant. How can I help you today?',
+      content: 'Hello! I\'m your AI assistant. How can I help you today?\n\nNeed human support? Contact us via WhatsApp: 011-59208977',
       timestamp: new Date(),
     },
   ]);
@@ -186,15 +186,27 @@ Current date: ${new Date().toLocaleDateString()}`;
             </div>
             <div className="flex items-center space-x-2">
               {!isMinimized && (
-                <button
-                  onClick={clearChat}
-                  className="p-1.5 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                  title="Clear chat"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
+                <>
+                  <a
+                    href="https://wa.me/601159208977"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-1.5 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors flex items-center gap-1.5"
+                    title="Contact via WhatsApp"
+                  >
+                    <Phone className="w-4 h-4" />
+                    {!isMinimized && <span className="text-xs">WhatsApp</span>}
+                  </a>
+                  <button
+                    onClick={clearChat}
+                    className="p-1.5 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                    title="Clear chat"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </>
               )}
               <button
                 onClick={isMinimized ? restoreChat : minimizeChat}
