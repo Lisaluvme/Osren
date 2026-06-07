@@ -325,7 +325,7 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
                                     </td>
                                     <td className="px-6 py-4 text-sm text-slate-500">{item.category}</td>
                                     <td className="px-6 py-4 text-right text-sm font-semibold text-slate-800 font-mono">
-                                        ${(item.sellingPrice || 0).toFixed(2)}
+                                        RM{(item.sellingPrice || 0).toFixed(2)}
                                     </td>
                                     <td className="px-6 py-4 text-center">
                                         <div className="flex items-center justify-center space-x-1">

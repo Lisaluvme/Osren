@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { InventoryItem } from '../types';
-import { getSalesForecast, SalesRecommendation } from '../services/geminiService';
-import { ShoppingCart, Sparkles, Plus, TrendingUp, Map, PieChart as PieChartIcon, Calendar, Package, User, Phone, MapPin, FileText } from 'lucide-react';
+import { ShoppingCart, Plus, Map, PieChart as PieChartIcon, Calendar, Package, MapPin, FileText } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, PieChart, Pie, Cell, Legend
@@ -36,9 +35,6 @@ interface SalesModuleProps {
 }
 
 const SalesModule: React.FC<SalesModuleProps> = ({inventory, onOrderPlaced}) => {
-  const [clientName, setClientName] = useState('AutoSpa Elite');
-  const [recommendations, setRecommendations] = useState<SalesRecommendation[]>([]);
-  const [loading, setLoading] = useState(false);
   const [cart, setCart] = useState<{name: string, qty: number}[]>([]);
   const [orderLoading, setOrderLoading] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
@@ -116,14 +112,6 @@ const SalesModule: React.FC<SalesModuleProps> = ({inventory, onOrderPlaced}) => 
     } finally {
       setOrdersLoading(false);
     }
-  };
-
-  const handleForecast = async () => {
-    setLoading(true);
-    // Pass inventory to give context to the AI
-    const results = await getSalesForecast(clientName, inventory);
-    setRecommendations(results);
-    setLoading(false);
   };
 
   const addToCart = (name: string) => {
@@ -233,76 +221,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({inventory, onOrderPlaced}) => 
     <div className="space-y-8">
        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
            <h2 className="text-2xl font-bold text-slate-800">Sales Intelligence & CRM</h2>
-           <div className="flex items-center space-x-2 bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
-               <label className="text-xs text-slate-500 font-medium ml-1">Client:</label>
-               <select
-                 value={clientName}
-                 onChange={(e) => {
-                     setClientName(e.target.value);
-                     setRecommendations([]);
-                 }}
-                 className="bg-transparent text-sm font-bold text-slate-800 focus:outline-none cursor-pointer"
-               >
-                   <option>AutoSpa Elite</option>
-                   <option>Detailing Bros</option>
-                   <option>City Motors Service</option>
-                   <option>Platinum Wash</option>
-               </select>
-           </div>
        </div>
-
-       {/* AI Recommendation Section */}
-       <section className="bg-gradient-to-r from-indigo-50 to-blue-50 p-6 rounded-2xl border border-indigo-100">
-           <div className="flex justify-between items-start mb-6">
-               <div>
-                    <h3 className="text-lg font-bold text-indigo-900 flex items-center">
-                        <Sparkles className="w-5 h-5 mr-2 text-indigo-600" />
-                        AI Smart Recommendations
-                    </h3>
-                    <p className="text-sm text-indigo-700 mt-1">
-                        Personalized upsell opportunities for <span className="font-semibold">{clientName}</span> based on catalog data.
-                    </p>
-               </div>
-               <button
-                onClick={handleForecast}
-                disabled={loading}
-                className="px-5 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center shadow-lg shadow-indigo-200 transition-all active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
-               >
-                   {loading ? (
-                       <span className="flex items-center"><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"/> Analyzing...</span>
-                   ) : (
-                       <>Generate Insights</>
-                   )}
-               </button>
-           </div>
-
-           {recommendations.length > 0 ? (
-               <div className="grid md:grid-cols-3 gap-6">
-                   {recommendations.map((rec, idx) => (
-                       <div key={idx} className="bg-white p-5 rounded-xl shadow-sm border border-indigo-100 hover:shadow-md transition-shadow relative overflow-hidden group">
-                           <div className="absolute top-0 right-0 bg-green-100 text-green-700 text-[10px] font-bold px-2 py-1 rounded-bl-lg">
-                               Margin: {rec.estimatedMargin}
-                           </div>
-                           <h4 className="font-bold text-slate-800 mb-2 mt-1">{rec.productName}</h4>
-                           <p className="text-xs text-slate-500 mb-4 leading-relaxed">{rec.reasoning}</p>
-                           <button
-                                onClick={() => addToCart(rec.productName)}
-                                className="w-full py-2 bg-slate-50 hover:bg-indigo-50 text-indigo-600 text-xs font-bold rounded border border-slate-200 hover:border-indigo-200 transition-colors flex items-center justify-center"
-                           >
-                               <Plus className="w-3 h-3 mr-1" /> Add to Order
-                           </button>
-                       </div>
-                   ))}
-               </div>
-           ) : (
-               !loading && (
-                   <div className="text-center py-8 text-indigo-300 border-2 border-dashed border-indigo-200 rounded-xl">
-                       <Sparkles className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                       <p className="text-sm">Click "Generate Insights" to analyze sales potential.</p>
-                   </div>
-               )
-           )}
-       </section>
 
        {/* Analytics Dashboard Grid */}
        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
