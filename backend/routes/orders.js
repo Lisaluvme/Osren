@@ -66,12 +66,13 @@ const saveOrderToSheets = async (order) => {
       order.createdAt,
       order.deliveryAddress || '',
       order.contactNumber || '',
-      order.notes || ''
+      order.notes || '',
+      order.signature || ''
     ];
 
     await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: 'Orders!A:J',
+      range: 'Orders!A:K',
       valueInputOption: 'RAW',
       resource: {
         values: [orderData]
@@ -101,7 +102,7 @@ const loadOrdersFromSheets = async () => {
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: 'Orders!A:J'
+      range: 'Orders!A:K'
     });
 
     const rows = response.data.values || [];
@@ -112,10 +113,10 @@ const loadOrdersFromSheets = async () => {
       // Create header row if sheet is empty
       await sheets.spreadsheets.values.update({
         spreadsheetId,
-        range: 'Orders!A1:J1',
+        range: 'Orders!A1:K1',
         valueInputOption: 'RAW',
         resource: {
-          values: [['Order ID', 'Client Name', 'Items', 'Total Items', 'Total Amount', 'Status', 'Created At', 'Delivery Address', 'Contact Number', 'Notes']]
+          values: [['Order ID', 'Client Name', 'Items', 'Total Items', 'Total Amount', 'Status', 'Created At', 'Delivery Address', 'Contact Number', 'Notes', 'Signature']]
         }
       });
       return [];
@@ -132,7 +133,8 @@ const loadOrdersFromSheets = async () => {
       createdAt: row[6] || new Date().toISOString(),
       deliveryAddress: row[7] || '',
       contactNumber: row[8] || '',
-      notes: row[9] || ''
+      notes: row[9] || '',
+      signature: row[10] || ''
     }));
 
     console.log(`✅ Loaded ${loadedOrders.length} orders from Google Sheets`);
@@ -458,7 +460,7 @@ router.put('/:id', async (req, res) => {
 // PATCH /api/orders/:id - Update order status
 router.patch('/:id', async (req, res) => {
   try {
-    const { status } = req.body;
+    const { status, signature } = req.body;
 
     if (!status) {
       return res.status(400).json({
@@ -481,6 +483,12 @@ router.patch('/:id', async (req, res) => {
     // Update status
     allOrders[orderIndex].status = status;
     allOrders[orderIndex].updatedAt = new Date().toISOString();
+
+    // Save signature if provided
+    if (signature) {
+      allOrders[orderIndex].signature = signature;
+      console.log('✅ Signature saved for order:', req.params.id);
+    }
 
     // Update in-memory storage
     const memoryIndex = orders.findIndex(o => o.id === req.params.id);
@@ -524,7 +532,7 @@ const updateOrderInSheets = async (order) => {
   // First, get all orders to find the row index
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: 'Orders!A:J'
+    range: 'Orders!A:K'
   });
 
   const rows = response.data.values || [];
@@ -556,12 +564,13 @@ const updateOrderInSheets = async (order) => {
     order.createdAt,
     order.deliveryAddress || '',
     order.contactNumber || '',
-    order.notes || ''
+    order.notes || '',
+    order.signature || ''
   ];
 
   await sheets.spreadsheets.values.update({
     spreadsheetId,
-    range: `Orders!A${rowIndex}:J${rowIndex}`,
+    range: `Orders!A${rowIndex}:K${rowIndex}`,
     valueInputOption: 'RAW',
     resource: {
       values: [orderData]
