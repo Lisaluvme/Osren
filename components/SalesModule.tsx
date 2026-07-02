@@ -1,11 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { InventoryItem } from '../types';
-import { ShoppingCart, Plus, Map, PieChart as PieChartIcon, Calendar, Package, MapPin, FileText } from 'lucide-react';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line, PieChart, Pie, Cell, Legend
-} from 'recharts';
-import businessDataService from '../services/businessDataService';
+import { Package, MapPin, Sparkles } from 'lucide-react';
+import EnhancedCart from './EnhancedCart';
+import '../styles/shoppingAnimations.css';
 
 // Order interface
 interface Order {
@@ -26,77 +23,43 @@ interface Order {
   notes?: string;
 }
 
-// --- Real Business Data Analytics ---
-const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b'];
-
 interface SalesModuleProps {
   inventory: InventoryItem[];
   onOrderPlaced?: (order: Order) => void;
 }
 
 const SalesModule: React.FC<SalesModuleProps> = ({inventory, onOrderPlaced}) => {
-  const [cart, setCart] = useState<{name: string, qty: number}[]>([]);
-  const [orderLoading, setOrderLoading] = useState(false);
-  const [orderSuccess, setOrderSuccess] = useState(false);
-  const [orderError, setOrderError] = useState('');
-  const [showOrderForm, setShowOrderForm] = useState(false);
-
-  // Order form state
-  const [orderFormData, setOrderFormData] = useState({
-    customerName: '',
-    adminName: '',
-    deliveryAddress: '',
-    contactNumber: '',
-    notes: ''
-  });
-
   const [recentOrders, setRecentOrders] = useState<Order[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
-
-  // Real business analytics data
-  const [regionalSales, setRegionalSales] = useState<any[]>([]);
-  const [productMix, setProductMix] = useState<any[]>([]);
-  const [seasonalTrends, setSeasonalTrends] = useState<any[]>([]);
-  const [analyticsLoading, setAnalyticsLoading] = useState(true);
 
   // Fetch business data on component mount
   useEffect(() => {
     fetchRecentOrders();
-    loadBusinessAnalytics();
   }, []);
 
-  const loadBusinessAnalytics = async () => {
-    setAnalyticsLoading(true);
-    try {
-      // Fetch real analytics data
-      const [regionalData, productData] = await Promise.all([
-        businessDataService.getRegionalSales(),
-        businessDataService.getProductMix()
-      ]);
+  const handleOrderPlaced = async (orderData: any) => {
+    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
-      setRegionalSales(regionalData);
-      setProductMix(productData);
+    const response = await fetch(`${API_BASE}/orders`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(orderData)
+    });
 
-      // Load seasonal trends from recent orders
-      const ordersResponse = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'}/orders?limit=100`);
-      const ordersData = await ordersResponse.json();
+    const data = await response.json();
 
-      if (ordersData.success) {
-        const monthlyData = businessDataService.calculateMonthlySales(ordersData.data);
-        // Format for chart
-        setSeasonalTrends(monthlyData.slice(-6).map(item => ({
-          month: new Date(item.period + '-01').toLocaleString('default', { month: 'short' }),
-          sales: item.revenue
-        })));
+    if (data.success) {
+      // Refresh recent orders
+      await fetchRecentOrders();
+
+      // Call the callback to navigate to Distribution with the new order
+      if (onOrderPlaced && data.data) {
+        onOrderPlaced(data.data);
       }
-    } catch (error) {
-      console.error('Failed to load business analytics:', error);
-      // Use empty arrays as fallback
-      setRegionalSales([]);
-      setProductMix([]);
-      setSeasonalTrends([]);
-    } finally {
-      setAnalyticsLoading(false);
+    } else {
+      throw new Error(data.error || 'Failed to place order');
     }
   };
 
@@ -116,420 +79,46 @@ const SalesModule: React.FC<SalesModuleProps> = ({inventory, onOrderPlaced}) => 
     }
   };
 
-  const addToCart = (name: string) => {
-      setCart(prev => {
-          const existing = prev.find(i => i.name === name);
-          if (existing) {
-              return prev.map(i => i.name === name ? { ...i, qty: i.qty + 1} : i);
-          }
-          return [...prev, { name, qty: 1}];
-      });
-  };
-
-  const removeFromCart = (name: string) => {
-      setCart(prev => {
-          const existing = prev.find(i => i.name === name);
-          if (existing && existing.qty > 1) {
-              return prev.map(i => i.name === name ? { ...i, qty: i.qty - 1} : i);
-          }
-          return prev.filter(i => i.name !== name);
-      });
-  };
-
-  const handlePlaceOrder = async () => {
-    if (cart.length === 0) {
-        setOrderError('Cart is empty. Please add items to your order.');
-        setTimeout(() => setOrderError(''), 3000);
-        return;
-    }
-
-    // Show order form if not shown yet
-    if (!showOrderForm) {
-        setShowOrderForm(true);
-        return;
-    }
-
-    // Validate required fields
-    if (!orderFormData.customerName || !orderFormData.adminName || !orderFormData.deliveryAddress) {
-        setOrderError('Please fill in Customer Name, Admin Name, and Delivery Address fields.');
-        setTimeout(() => setOrderError(''), 3000);
-        return;
-    }
-
-    setOrderLoading(true);
-    setOrderError('');
-
-    try {
-        const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
-
-        const response = await fetch(`${API_BASE}/orders`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                clientName: orderFormData.customerName,
-                adminName: orderFormData.adminName,
-                items: cart.map(item => ({
-                    name: item.name,
-                    quantity: item.qty
-                })),
-                deliveryAddress: orderFormData.deliveryAddress,
-                contactNumber: orderFormData.contactNumber,
-                notes: orderFormData.notes
-            })
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            // Show success message
-            setOrderSuccess(true);
-
-            // Refresh recent orders
-            await fetchRecentOrders();
-
-            // Call the callback to navigate to Distribution with the new order
-            if (onOrderPlaced && data.data) {
-                onOrderPlaced(data.data);
-            }
-
-            // Clear cart and form after successful order
-            setTimeout(() => {
-                setCart([]);
-                setOrderSuccess(false);
-                setShowOrderForm(false);
-                setOrderFormData({
-                    customerName: '',
-                    adminName: '',
-                    deliveryAddress: '',
-                    contactNumber: '',
-                    notes: ''
-                });
-            }, 2000);
-        } else {
-            setOrderError(data.error || 'Failed to place order. Please try again.');
-            setTimeout(() => setOrderError(''), 3000);
-        }
-
-    } catch (error) {
-        console.error('Order placement failed:', error);
-        setOrderError('Failed to place order. Please try again.');
-        setTimeout(() => setOrderError(''), 3000);
-    } finally {
-        setOrderLoading(false);
-    }
-  };
-
-  const getOrderTotal = () => {
-      return cart.reduce((total, item) => {
-          const inventoryItem = inventory.find(inv => inv.name === item.name);
-          const price = inventoryItem ? inventoryItem.sellingPrice : 0;
-          return total + (price * item.qty);
-      }, 0);
-  };
-
   return (
-    <div className="space-y-8">
-       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-           <h2 className="text-2xl font-bold text-slate-800">Sales Intelligence & CRM</h2>
-       </div>
-
-       {/* Analytics Dashboard Grid */}
-       <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-           {/* Regional Analysis */}
-           <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-               <div className="flex items-center justify-between mb-4">
-                   <h3 className="font-bold text-slate-700 flex items-center"><Map className="w-4 h-4 mr-2" /> Sales by Region</h3>
-                   <button onClick={loadBusinessAnalytics} className="text-blue-600 hover:text-blue-700 text-xs">Refresh</button>
+    <div className="space-y-6 app-container">
+       {/* Modern App Header */}
+       <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 rounded-2xl p-6 text-white shadow-xl animate-fade-in">
+           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+               <div>
+                   <div className="flex items-center gap-3 mb-2">
+                       <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center animate-pulse-soft">
+                           <span className="text-2xl">🛒</span>
+                       </div>
+                       <div>
+                           <h2 className="text-2xl font-bold">Sales & Orders</h2>
+                           <p className="text-blue-100 text-sm">Manage your inventory and orders</p>
+                       </div>
+                   </div>
+                   <div className="flex gap-4 mt-3 md:mt-0">
+                       <div className="text-center">
+                           <p className="text-2xl font-bold">{inventory.length}</p>
+                           <p className="text-xs text-blue-200">Products</p>
+                       </div>
+                       <div className="text-center">
+                           <p className="text-2xl font-bold">{recentOrders.length}</p>
+                           <p className="text-xs text-blue-200">Recent Orders</p>
+                       </div>
+                   </div>
                </div>
-               {analyticsLoading ? (
-                   <div className="h-48 flex items-center justify-center text-slate-400">
-                       <div className="w-6 h-6 border-2 border-slate-300 border-t-blue-600 rounded-full animate-spin mr-2"/>
-                       Loading...
-                   </div>
-               ) : regionalSales.length === 0 ? (
-                   <div className="h-48 flex items-center justify-center text-slate-400 text-sm">
-                       No sales data yet
-                   </div>
-               ) : (
-                   <div className="h-48 text-xs w-full">
-                       <ResponsiveContainer width="100%" height={192}>
-                           <BarChart data={regionalSales} layout="vertical">
-                               <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
-                               <XAxis type="number" hide />
-                               <YAxis dataKey="region" type="category" width={70} tick={{fontSize: 10}} />
-                               <Tooltip cursor={{fill: '#f1f5f9'}} />
-                               <Bar dataKey="sales" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={15} />
-                           </BarChart>
-                       </ResponsiveContainer>
-                   </div>
-               )}
-           </div>
-
-           {/* Product Mix */}
-           <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-               <div className="flex items-center justify-between mb-4">
-                   <h3 className="font-bold text-slate-700 flex items-center"><PieChartIcon className="w-4 h-4 mr-2" /> Product Categories</h3>
-               </div>
-               {analyticsLoading ? (
-                   <div className="h-48 flex items-center justify-center text-slate-400">
-                       <div className="w-6 h-6 border-2 border-slate-300 border-t-blue-600 rounded-full animate-spin mr-2"/>
-                       Loading...
-                   </div>
-               ) : productMix.length === 0 ? (
-                   <div className="h-48 flex items-center justify-center text-slate-400 text-sm">
-                       No product data yet
-                   </div>
-               ) : (
-                   <div className="h-48 text-xs w-full">
-                       <ResponsiveContainer width="100%" height={192}>
-                           <PieChart>
-                               <Pie
-                                   data={productMix}
-                                   cx="50%"
-                                   cy="50%"
-                                   innerRadius={40}
-                                   outerRadius={70}
-                                   paddingAngle={5}
-                                   dataKey="value"
-                               >
-                                   {productMix.map((entry, index) => (
-                                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                   ))}
-                               </Pie>
-                               <Tooltip />
-                               <Legend layout="vertical" verticalAlign="middle" align="right" iconSize={8} />
-                           </PieChart>
-                       </ResponsiveContainer>
-                   </div>
-               )}
-           </div>
-
-           {/* Sales Trends */}
-           <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-               <div className="flex items-center justify-between mb-4">
-                   <h3 className="font-bold text-slate-700 flex items-center"><Calendar className="w-4 h-4 mr-2" /> Revenue Trends</h3>
-               </div>
-               {analyticsLoading ? (
-                   <div className="h-48 flex items-center justify-center text-slate-400">
-                       <div className="w-6 h-6 border-2 border-slate-300 border-t-blue-600 rounded-full animate-spin mr-2"/>
-                       Loading...
-                   </div>
-               ) : seasonalTrends.length === 0 ? (
-                   <div className="h-48 flex items-center justify-center text-slate-400 text-sm">
-                       No trends data yet
-                   </div>
-               ) : (
-                   <div className="h-48 text-xs w-full">
-                       <ResponsiveContainer width="100%" height={192}>
-                           <LineChart data={seasonalTrends}>
-                               <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                               <XAxis dataKey="month" tick={{fontSize: 10}} />
-                               <YAxis hide />
-                               <Tooltip />
-                               <Line type="monotone" dataKey="sales" stroke="#10b981" strokeWidth={2} dot={{r: 3}} activeDot={{r: 5}} />
-                           </LineChart>
-                       </ResponsiveContainer>
-                   </div>
-               )}
-           </div>
-       </section>
-
-       {/* Order Management Section */}
-       <section className="grid md:grid-cols-3 gap-6">
-           {/* Product Catalog */}
-           <div className="md:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-               <h3 className="font-bold text-slate-800 mb-4">Full Product Catalog</h3>
-               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-80 overflow-y-auto pr-2">
-                   {inventory.map(item => (
-                       <div key={item.id} className="flex justify-between items-center p-3 border border-slate-100 rounded-lg hover:bg-slate-50 group transition-colors">
-                           <div>
-                               <p className="font-medium text-slate-800 text-sm">{item.name}</p>
-                               <p className="text-xs text-slate-400">Stock: {item.quantity}</p>
-                           </div>
-                           <button
-                            onClick={() => addToCart(item.name)}
-                            className="p-1.5 bg-slate-100 text-slate-500 rounded hover:bg-blue-600 hover:text-white transition-colors"
-                           >
-                               <Plus className="w-4 h-4" />
-                           </button>
-                       </div>
-                   ))}
-               </div>
-           </div>
-
-           {/* Current Cart & Order Form */}
-           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col h-full">
-               <h3 className="font-bold text-slate-800 mb-4 flex items-center">
-                   <ShoppingCart className="w-5 h-5 mr-2" /> Current Order
-               </h3>
-
-               {/* Cart Items */}
-               <div className="flex-1 bg-slate-50 rounded-lg p-4 mb-4 overflow-y-auto min-h-[150px]">
-                   {cart.length === 0 ? (
-                       <div className="h-full flex flex-col items-center justify-center text-slate-400">
-                           <ShoppingCart className="w-8 h-8 mb-2 opacity-50"/>
-                           <p className="text-xs">Cart is empty</p>
-                       </div>
-                   ) : (
-                       <div className="space-y-3">
-                           {cart.map((item, idx) => {
-                               const inventoryItem = inventory.find(inv => inv.name === item.name);
-                               const price = inventoryItem ? inventoryItem.sellingPrice : 0;
-                               return (
-                                   <div key={idx} className="bg-white p-2 rounded border border-slate-100">
-                                       <div className="flex justify-between text-sm items-center mb-1">
-                                           <span className="text-slate-700 font-medium">{item.name}</span>
-                                           <span className="text-slate-900 font-bold">RM{(price * item.qty).toFixed(2)}</span>
-                                       </div>
-                                       <div className="flex justify-between items-center">
-                                           <span className="text-xs text-slate-400">RM{price.toFixed(2)} each</span>
-                                           <div className="flex items-center gap-2">
-                                               <button
-                                                   onClick={() => removeFromCart(item.name)}
-                                                   className="text-slate-400 hover:text-red-500 transition-colors text-xs w-6 h-6 rounded flex items-center justify-center"
-                                               >
-                                                   −
-                                               </button>
-                                               <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs font-bold">x{item.qty}</span>
-                                               <button
-                                                   onClick={() => addToCart(item.name)}
-                                                   className="text-slate-400 hover:text-green-500 transition-colors text-xs w-6 h-6 rounded flex items-center justify-center"
-                                               >
-                                                   +
-                                               </button>
-                                           </div>
-                                       </div>
-                                   </div>
-                               );
-                           })}
-                       </div>
-                   )}
-               </div>
-
-               {/* Order Summary */}
-               {cart.length > 0 && (
-                   <div className="bg-slate-50 rounded-lg p-4 mb-4">
-                       <div className="flex justify-between text-sm text-slate-600 mb-2">
-                           <span>Total Items</span>
-                           <span className="font-medium">{cart.reduce((a, b) => a + b.qty, 0)}</span>
-                       </div>
-                       <div className="flex justify-between text-sm font-bold text-slate-900">
-                           <span>Order Total</span>
-                           <span>RM{getOrderTotal().toFixed(2)}</span>
-                       </div>
-                   </div>
-               )}
-
-               {/* Order Form */}
-               {showOrderForm && (
-                   <div className="bg-blue-50 rounded-lg p-4 mb-4 border border-blue-100">
-                       <h4 className="font-semibold text-blue-900 mb-3 text-sm flex items-center">
-                           <FileText className="w-4 h-4 mr-2" /> Order Details
-                       </h4>
-                       <div className="space-y-3">
-                           <div>
-                               <label className="block text-xs font-medium text-slate-700 mb-1">Customer Name *</label>
-                               <input
-                                   type="text"
-                                   value={orderFormData.customerName}
-                                   onChange={(e) => setOrderFormData({...orderFormData, customerName: e.target.value})}
-                                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                   placeholder="Enter customer name"
-                                   required
-                               />
-                           </div>
-                           <div>
-                               <label className="block text-xs font-medium text-slate-700 mb-1">Admin Name (Who placed this order) *</label>
-                               <select
-                                   value={orderFormData.adminName}
-                                   onChange={(e) => setOrderFormData({...orderFormData, adminName: e.target.value})}
-                                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                   required
-                               >
-                                   <option value="">Select admin name...</option>
-                                   <option value="Admin/Management">Admin/Management</option>
-                                   <option value="Accounts Officer">Accounts Officer</option>
-                                   <option value="Sales Rep">Sales Rep</option>
-                                   <option value="Warehouse Manager">Warehouse Manager</option>
-                                   <option value="Logistics/Driver">Logistics/Driver</option>
-                               </select>
-                           </div>
-                           <div>
-                               <label className="block text-xs font-medium text-slate-700 mb-1">Delivery Address *</label>
-                               <input
-                                   type="text"
-                                   value={orderFormData.deliveryAddress}
-                                   onChange={(e) => setOrderFormData({...orderFormData, deliveryAddress: e.target.value})}
-                                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                   placeholder="Enter delivery address"
-                                   required
-                               />
-                           </div>
-                           <div>
-                               <label className="block text-xs font-medium text-slate-700 mb-1">Contact Number</label>
-                               <input
-                                   type="tel"
-                                   value={orderFormData.contactNumber}
-                                   onChange={(e) => setOrderFormData({...orderFormData, contactNumber: e.target.value})}
-                                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                   placeholder="Enter contact number"
-                               />
-                           </div>
-                           <div>
-                               <label className="block text-xs font-medium text-slate-700 mb-1">Notes (Optional)</label>
-                               <textarea
-                                   value={orderFormData.notes}
-                                   onChange={(e) => setOrderFormData({...orderFormData, notes: e.target.value})}
-                                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                   placeholder="Any special instructions..."
-                                   rows={2}
-                               />
-                           </div>
-                       </div>
-                   </div>
-               )}
-
-               {/* Error Message */}
-               {orderError && (
-                   <div className="mb-3 bg-red-50 border border-red-200 text-red-600 px-3 py-2 rounded text-xs">
-                       {orderError}
-                   </div>
-               )}
-
-               {/* Success Message */}
-               {orderSuccess && (
-                   <div className="mb-3 bg-green-50 border border-green-200 text-green-600 px-3 py-2 rounded text-xs flex items-center">
-                       <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                           <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                       </svg>
-                       Order placed successfully!
-                   </div>
-               )}
-
-               <button
-                   onClick={handlePlaceOrder}
-                   disabled={orderLoading || cart.length === 0}
-                   className={`w-full py-3 rounded-lg font-medium shadow-lg shadow-slate-200 transition-transform active:scale-[0.98] ${
-                       orderLoading || cart.length === 0
-                           ? 'bg-slate-400 text-slate-200 cursor-not-allowed'
-                           : 'bg-slate-900 text-white hover:bg-slate-800'
-                   }`}
-               >
-                   {orderLoading ? (
-                       <span className="flex items-center justify-center">
-                           <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"/>
-                           Processing...
-                       </span>
-                   ) : showOrderForm ? (
-                       'Confirm Order'
-                   ) : (
-                       'Place Order'
-                   )}
+               <button className="px-6 py-3 bg-white text-blue-600 rounded-xl font-bold hover:bg-blue-50 transition-all shadow-lg hover:scale-105 btn-press">
+                   + Quick Order
                </button>
            </div>
-       </section>
+       </div>
+
+       {/* Product Catalog - Always Visible */}
+       <div className="animate-slide-in-left stagger-1">
+         <EnhancedCart
+           inventory={inventory}
+           onPlaceOrder={handleOrderPlaced}
+           recentOrders={recentOrders}
+         />
+       </div>
 
        {/* Recent Orders Section */}
        <section className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">

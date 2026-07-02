@@ -35,11 +35,11 @@ export const MOCK_CASHFLOW: CashFlowData[] = [
 ];
 
 export const MENU_ITEMS = [
-  { id: 'finance', label: 'Finance & Dashboard', icon: 'PieChart', roles: [UserRole.ADMIN] },
-  { id: 'accounts', label: 'Accounts (AP/AR)', icon: 'FileText', roles: [UserRole.ADMIN, UserRole.ACCOUNTS] },
-  { id: 'distribution', label: 'Distribution', icon: 'Workflow', roles: [UserRole.ADMIN, UserRole.SALES, UserRole.WAREHOUSE] },
+  { id: 'finance', label: 'Finance & Dashboard', icon: 'PieChart', roles: [UserRole.ADMIN, UserRole.FINANCE] },
+  { id: 'accounts', label: 'Accounts (AP/AR)', icon: 'FileText', roles: [UserRole.ADMIN, UserRole.FINANCE] },
+  { id: 'distribution', label: 'Distribution', icon: 'Workflow', roles: [UserRole.ADMIN, UserRole.SALES] },
   { id: 'warehouse', label: 'Warehouse', icon: 'Package', roles: [UserRole.ADMIN, UserRole.WAREHOUSE] },
   { id: 'sales', label: 'Sales & CRM', icon: 'Briefcase', roles: [UserRole.ADMIN, UserRole.SALES] },
   { id: 'delivery', label: 'Delivery', icon: 'Truck', roles: [UserRole.ADMIN, UserRole.DRIVER] },
-  { id: 'chatbot', label: 'AI Assistant', icon: 'MessageSquare', roles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.WAREHOUSE, UserRole.SALES, UserRole.DISTRIBUTION, UserRole.DRIVER, UserRole.ACCOUNTS] },
+  { id: 'chatbot', label: 'AI Assistant', icon: 'MessageSquare', roles: [UserRole.ADMIN, UserRole.SALES, UserRole.DRIVER, UserRole.FINANCE, UserRole.WAREHOUSE] },
 ];

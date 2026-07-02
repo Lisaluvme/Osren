@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import LoginPage from './components/LoginPage';
 import Layout from './components/Layout';
 import FinanceModule from './components/FinanceModule';
 import AccountsModule from './components/AccountsModule';
@@ -12,9 +13,13 @@ import { UserRole, InventoryItem, SalesOrder } from './types';
 import inventoryService from './services/inventoryService';
 
 const App: React.FC = () => {
+  // Authentication state
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userInfo, setUserInfo] = useState<{ name: string; email: string } | null>(null);
+
   // State for global user context and navigation
   const [currentUserRole, setCurrentUserRole] = useState<UserRole>(UserRole.ADMIN);
-  const [activeModule, setActiveModule] = useState<string>('warehouse'); // Start with warehouse to show real data
+  const [activeModule, setActiveModule] = useState<string>('sales'); // Start with sales for admin
   // Global inventory state - loads real data from Google Sheets
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [inventoryLoading, setInventoryLoading] = useState(true);
@@ -56,6 +61,38 @@ const App: React.FC = () => {
   };
 
   // Handle order placement - navigate to Distribution with new order
+  // Handle login
+  const handleLogin = (role: UserRole, user: { name: string; email: string }) => {
+    setCurrentUserRole(role);
+    setUserInfo(user);
+    setIsAuthenticated(true);
+
+    // Set first module based on role
+    let firstModule = 'sales'; // Default for admin
+    if (role === UserRole.SALES) {
+      firstModule = 'sales';
+    } else if (role === UserRole.DRIVER) {
+      firstModule = 'delivery';
+    } else if (role === UserRole.FINANCE) {
+      firstModule = 'finance'; // Finance users start with Finance module
+    } else if (role === UserRole.WAREHOUSE) {
+      firstModule = 'warehouse'; // Warehouse users start with Warehouse module
+    } else if (role === UserRole.ADMIN) {
+      firstModule = 'sales'; // Admin starts with sales too
+    }
+
+    setActiveModule(firstModule);
+    console.log('User logged in:', { role, user, firstModule });
+  };
+
+  // Handle logout
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setUserInfo(null);
+    setCurrentUserRole(UserRole.ADMIN);
+    setActiveModule('sales'); // Reset to sales
+  };
+
   const handleOrderPlaced = (order: any) => {
     // Transform order to match DistributionModule's expected SalesOrder format
     const transformedOrder: SalesOrder = {
@@ -125,13 +162,19 @@ const App: React.FC = () => {
     }
   };
 
+  // Show login page if not authenticated
+  if (!isAuthenticated) {
+    return <LoginPage onLogin={handleLogin} />;
+  }
+
   return (
     <>
       <Layout
         currentRole={currentUserRole}
-        onRoleChange={setCurrentUserRole}
         activeModule={activeModule}
         onModuleChange={setActiveModule}
+        userInfo={userInfo}
+        onLogout={handleLogout}
       >
         {renderModule()}
       </Layout>

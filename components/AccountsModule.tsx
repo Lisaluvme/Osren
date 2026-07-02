@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Invoice, SalesOrder } from '../types';
-import { Filter, CheckCircle, AlertCircle, Clock, RefreshCw, DollarSign } from 'lucide-react';
+import { Filter, CheckCircle, AlertCircle, Clock, RefreshCw, DollarSign, Receipt, X } from 'lucide-react';
+import InvoiceActions from './invoices/InvoiceActions';
+import { generateInvoicePDF } from '../services/invoicePDFService';
+import { generateReceiptPDF } from '../services/receiptPDFService';
+import { DEFAULT_COMPANY_INFO } from '../constants/invoiceTemplate';
 
 interface AccountsModuleProps {
   newOrder?: SalesOrder | null;
@@ -11,6 +15,17 @@ const AccountsModule: React.FC<AccountsModuleProps> = ({newOrder}) => {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+
+  // Receipt functionality state
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [paymentInvoice, setPaymentInvoice] = useState<any | null>(null);
+  const [paymentDetails, setPaymentDetails] = useState({
+    paymentDate: new Date().toISOString().split('T')[0],
+    paymentMethod: 'Cash',
+    transactionId: ''
+  });
+  const [isGeneratingReceipt, setIsGeneratingReceipt] = useState(false);
 
   // Fetch real orders from backend on component mount and when new order is placed
   useEffect(() => {
@@ -111,6 +126,206 @@ const AccountsModule: React.FC<AccountsModuleProps> = ({newOrder}) => {
     }
   };
 
+  const handlePrintInvoice = () => {
+    if (!selectedInvoice) return;
+
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Invoice - ${selectedInvoice.id}</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <style>
+          @media print {
+            body { margin: 0; padding: 20px; }
+            .no-print { display: none !important; }
+          }
+        </style>
+      </head>
+      <body class="bg-gray-50">
+        <div class="max-w-4xl mx-auto bg-white rounded-lg shadow-lg p-8">
+          <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-blue-900">${DEFAULT_COMPANY_INFO.name}</h1>
+            <p class="text-gray-600 mt-2">${DEFAULT_COMPANY_INFO.address}</p>
+            <div class="flex justify-center gap-4 mt-2 text-sm text-gray-600">
+              <span>📞 ${DEFAULT_COMPANY_INFO.phone}</span>
+              <span>✉️ ${DEFAULT_COMPANY_INFO.email}</span>
+            </div>
+          </div>
+
+          <div class="flex justify-between items-start mb-8">
+            <div>
+              <h2 class="text-2xl font-bold text-gray-900">INVOICE</h2>
+              <p class="text-gray-600">#${selectedInvoice.id}</p>
+              <div class="mt-2 inline-flex items-center px-3 py-1 rounded-full text-sm font-bold border-2 ${
+                selectedInvoice.status === 'Paid' ? 'bg-green-100 text-green-700 border-green-300' :
+                selectedInvoice.status === 'Overdue' ? 'bg-red-100 text-red-700 border-red-300' :
+                selectedInvoice.status === 'Approved' ? 'bg-blue-100 text-blue-700 border-blue-300' :
+                'bg-yellow-100 text-yellow-700 border-yellow-300'
+              }">
+                ${selectedInvoice.status}
+              </div>
+            </div>
+            <div class="text-right">
+              <div class="text-sm text-gray-600">Issue Date: ${new Date().toLocaleDateString()}</div>
+              <div class="text-sm text-gray-600">Due Date: ${new Date(selectedInvoice.dueDate).toLocaleDateString()}</div>
+            </div>
+          </div>
+
+          <div class="mb-8">
+            <h3 class="text-sm font-bold text-gray-700 uppercase tracking-wide mb-2">Bill To</h3>
+            <div class="text-gray-800">
+              <p class="font-semibold">${selectedInvoice.clientName}</p>
+              ${selectedInvoice.deliveryAddress ? `<p class="text-gray-600 text-sm mt-1">${selectedInvoice.deliveryAddress}</p>` : ''}
+              ${selectedInvoice.contactNumber ? `<p class="text-gray-600 text-sm">📞 ${selectedInvoice.contactNumber}</p>` : ''}
+            </div>
+          </div>
+
+          <table class="w-full mb-8">
+            <thead>
+              <tr class="bg-gray-50 border-b-2 border-gray-200">
+                <th class="text-left py-3 px-4 text-xs font-bold text-gray-700 uppercase">Item</th>
+                <th class="text-center py-3 px-4 text-xs font-bold text-gray-700 uppercase">Qty</th>
+                <th class="text-right py-3 px-4 text-xs font-bold text-gray-700 uppercase">Price</th>
+                <th class="text-right py-3 px-4 text-xs font-bold text-gray-700 uppercase">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${selectedInvoice.items && selectedInvoice.items.length > 0 ? selectedInvoice.items.map((item: any) => `
+                <tr class="border-b border-gray-100">
+                  <td class="py-3 px-4 text-gray-700">${item.name}</td>
+                  <td class="py-3 px-4 text-center text-gray-600">${item.quantity}</td>
+                  <td class="py-3 px-4 text-right text-gray-600 font-mono">RM ${(item.unitPrice || 0).toFixed(2)}</td>
+                  <td class="py-3 px-4 text-right text-gray-800 font-semibold font-mono">RM ${((item.unitPrice || 0) * item.quantity).toFixed(2)}</td>
+                </tr>
+              `).join('') : '<tr><td colspan="4" class="py-6 text-center text-gray-400">No items</td></tr>'}
+            </tbody>
+            <tfoot class="bg-gray-50 border-t-2 border-gray-200">
+              <tr>
+                <td colspan="3" class="p-3 text-right font-bold text-gray-700">Total:</td>
+                <td class="p-3 text-right font-bold text-gray-800 font-mono">RM ${selectedInvoice.amount.toFixed(2)}</td>
+              </tr>
+            </tfoot>
+          </table>
+
+          ${selectedInvoice.signature ? `
+          <div class="mb-8">
+            <h3 class="text-sm font-bold text-gray-700 uppercase tracking-wide mb-3">Customer Signature</h3>
+            <img src="${selectedInvoice.signature}" alt="Customer Signature" class="h-24 border border-gray-200 rounded bg-white" />
+            <p class="text-xs text-gray-400 mt-2">Signed on delivery</p>
+          </div>
+          ` : ''}
+
+          <div class="text-center text-gray-400 text-sm">
+            <p>Generated on ${new Date().toLocaleDateString()}</p>
+            <p class="mt-1">${DEFAULT_COMPANY_INFO.footer}</p>
+          </div>
+        </div>
+        <script>
+          window.onload = function() {
+            window.print();
+            window.onafterprint = function() {
+              window.close();
+            };
+          };
+        </script>
+      </body>
+    </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+    }
+  };
+
+  const handleDownloadPDF = async () => {
+    if (!selectedInvoice) return;
+
+    try {
+      setIsGeneratingPDF(true);
+
+      // Transform invoice data to EnhancedInvoice format
+      const enhancedInvoice = {
+        id: selectedInvoice.id,
+        clientName: selectedInvoice.clientName,
+        clientAddress: selectedInvoice.deliveryAddress,
+        clientContact: selectedInvoice.contactNumber,
+        amount: selectedInvoice.amount,
+        dueDate: selectedInvoice.dueDate,
+        issueDate: selectedInvoice.createdAt,
+        status: selectedInvoice.status,
+        items: selectedInvoice.items || [],
+        notes: selectedInvoice.notes,
+        signature: selectedInvoice.signature,
+        paymentTerms: 'Net 30'
+      };
+
+      await generateInvoicePDF(enhancedInvoice, DEFAULT_COMPANY_INFO);
+      console.log('✅ PDF generated successfully');
+    } catch (error) {
+      console.error('❌ Error generating PDF:', error);
+      alert('Failed to generate PDF. Please try again.');
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+
+  // Receipt functionality
+  const handleOpenPaymentDialog = (invoice: any) => {
+    setPaymentInvoice(invoice);
+    setPaymentDetails({
+      paymentDate: new Date().toISOString().split('T')[0],
+      paymentMethod: 'Cash',
+      transactionId: ''
+    });
+    setPaymentDialogOpen(true);
+  };
+
+  const handleClosePaymentDialog = () => {
+    setPaymentDialogOpen(false);
+    setPaymentInvoice(null);
+    setPaymentDetails({
+      paymentDate: new Date().toISOString().split('T')[0],
+      paymentMethod: 'Cash',
+      transactionId: ''
+    });
+  };
+
+  const handleGenerateReceipt = async () => {
+    if (!paymentInvoice) return;
+
+    try {
+      setIsGeneratingReceipt(true);
+
+      await generateReceiptPDF(paymentInvoice, {
+        paymentDate: paymentDetails.paymentDate,
+        paymentMethod: paymentDetails.paymentMethod,
+        transactionId: paymentDetails.transactionId || undefined,
+        companyInfo: DEFAULT_COMPANY_INFO
+      });
+
+      handleClosePaymentDialog();
+      console.log('✅ Receipt generated successfully');
+    } catch (error) {
+      console.error('❌ Error generating receipt:', error);
+      alert('Failed to generate receipt. Please try again.');
+    } finally {
+      setIsGeneratingReceipt(false);
+    }
+  };
+
+  const handleMarkPaidAndGenerateReceipt = async (invoice: any) => {
+    try {
+      await handleStatusChange(invoice.id, 'Paid');
+      handleOpenPaymentDialog(invoice);
+    } catch (error) {
+      console.error('❌ Error marking as paid:', error);
+      alert('Failed to mark as paid. Please try again.');
+    }
+  };
+
   const filteredInvoices = filter === 'All' ? invoices : invoices.filter(inv => inv.status === filter);
 
   const getStatusColor = (status: string) => {
@@ -206,15 +421,23 @@ const AccountsModule: React.FC<AccountsModuleProps> = ({newOrder}) => {
                             </button>
                           )}
                           <button
-                            onClick={() => handleStatusChange(inv.id, 'Paid')}
+                            onClick={() => handleMarkPaidAndGenerateReceipt(inv)}
                             className="px-2 py-1 text-xs font-medium text-green-600 bg-green-50 hover:bg-green-100 rounded border border-green-200 transition-colors"
                           >
-                            Mark Paid
+                            Mark Paid & Receipt
                           </button>
                         </>
                       )}
                       {inv.status === 'Paid' && (
-                        <span className="text-xs text-green-600 font-medium">✓ Paid</span>
+                        <>
+                          <button
+                            onClick={() => handleOpenPaymentDialog(inv)}
+                            className="px-2 py-1 text-xs font-medium text-purple-600 bg-purple-50 hover:bg-purple-100 rounded border border-purple-200 transition-colors flex items-center gap-1"
+                          >
+                            <Receipt className="w-3 h-3" />
+                            Receipt
+                          </button>
+                        </>
                       )}
                     </div>
                   </td>
@@ -346,13 +569,130 @@ const AccountsModule: React.FC<AccountsModuleProps> = ({newOrder}) => {
             </div>
 
             {/* Modal Footer */}
-            <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end">
+            <div className="p-6 border-t border-slate-100 bg-slate-50">
+              <div className="flex justify-between items-center">
+                <InvoiceActions
+                  onPrint={handlePrintInvoice}
+                  onDownloadPDF={handleDownloadPDF}
+                  isGeneratingPDF={isGeneratingPDF}
+                />
+                <button
+                  onClick={() => setSelectedInvoice(null)}
+                  className="px-6 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Details Dialog */}
+      {paymentDialogOpen && paymentInvoice && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-gradient-to-r from-purple-600 to-indigo-700 px-6 py-4 flex justify-between items-center sticky top-0">
+              <h2 className="text-xl font-bold text-white">Generate Payment Receipt</h2>
               <button
-                onClick={() => setSelectedInvoice(null)}
-                className="px-6 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors"
+                onClick={handleClosePaymentDialog}
+                className="text-white/80 hover:text-white transition-colors"
               >
-                Close
+                <X className="w-5 h-5" />
               </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                <p className="text-sm text-purple-700">
+                  <span className="font-medium">Invoice:</span> #{paymentInvoice.id}
+                </p>
+                <p className="text-sm text-purple-700">
+                  <span className="font-medium">Customer:</span> {paymentInvoice.clientName}
+                </p>
+                <p className="text-sm text-purple-700 font-bold mt-1">
+                  Amount: RM {(paymentInvoice.finalAmount || paymentInvoice.amount).toFixed(2)}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Payment Date *
+                </label>
+                <input
+                  type="date"
+                  value={paymentDetails.paymentDate}
+                  onChange={(e) => setPaymentDetails({...paymentDetails, paymentDate: e.target.value})}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Payment Method *
+                </label>
+                <select
+                  value={paymentDetails.paymentMethod}
+                  onChange={(e) => setPaymentDetails({...paymentDetails, paymentMethod: e.target.value})}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  required
+                >
+                  <option value="Cash">Cash</option>
+                  <option value="Bank Transfer">Bank Transfer</option>
+                  <option value="Credit Card">Credit Card</option>
+                  <option value="Debit Card">Debit Card</option>
+                  <option value="Online Banking">Online Banking</option>
+                  <option value="Cheque">Cheque</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Transaction ID (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={paymentDetails.transactionId}
+                  onChange={(e) => setPaymentDetails({...paymentDetails, transactionId: e.target.value})}
+                  placeholder="e.g., TXN123456789"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                />
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-xs text-blue-700">
+                  <span className="font-medium">💡 Tip:</span> Include transaction ID for better tracking. It will appear on the receipt.
+                </p>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={handleClosePaymentDialog}
+                  className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+                  disabled={isGeneratingReceipt}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleGenerateReceipt}
+                  disabled={isGeneratingReceipt || !paymentDetails.paymentDate || !paymentDetails.paymentMethod}
+                  className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {isGeneratingReceipt ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Receipt className="w-4 h-4" />
+                      Generate Receipt
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -18,21 +18,23 @@ import {
 interface LayoutProps {
   children: React.ReactNode;
   currentRole: UserRole;
-  onRoleChange: (role: UserRole) => void;
   activeModule: string;
   onModuleChange: (id: string) => void;
+  userInfo?: { name: string; email: string } | null;
+  onLogout?: () => void;
 }
 
 const IconMap: Record<string, React.FC<any>> = {
   PieChart, FileText, Workflow, Package, Briefcase, Truck, MessageSquare
 };
 
-const Layout: React.FC<LayoutProps> = ({ 
-  children, 
-  currentRole, 
-  onRoleChange, 
-  activeModule, 
-  onModuleChange 
+const Layout: React.FC<LayoutProps> = ({
+  children,
+  currentRole,
+  activeModule,
+  onModuleChange,
+  userInfo,
+  onLogout
 }) => {
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
 
@@ -44,8 +46,8 @@ const Layout: React.FC<LayoutProps> = ({
       <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-white transform transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="flex flex-col h-full">
           <div className="p-6 border-b border-slate-700">
-            <h1 className="text-2xl font-bold tracking-tight text-blue-400">OSREN <span className="text-white font-light">Ops</span></h1>
-            <p className="text-xs text-slate-400 mt-1">Integrated Manager</p>
+            <h1 className="text-2xl font-bold tracking-tight text-blue-400">GMP <span className="text-white font-light">mobile sales app</span></h1>
+            <p className="text-xs text-slate-400 mt-1"></p>
           </div>
 
           <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
@@ -68,25 +70,26 @@ const Layout: React.FC<LayoutProps> = ({
           </nav>
 
           <div className="p-4 border-t border-slate-700 bg-slate-800">
-            <div className="flex items-center mb-4">
-              <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold">
-                {currentRole.charAt(0)}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold">
+                  {userInfo?.name.charAt(0) || currentRole.charAt(0)}
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm font-medium text-white">{userInfo?.name || 'Current User'}</p>
+                  <p className="text-xs text-slate-400 capitalize">{currentRole}</p>
+                </div>
               </div>
-              <div className="ml-3">
-                <p className="text-sm font-medium text-white">Current User</p>
-                <p className="text-xs text-slate-400 truncate w-32">{currentRole}</p>
-              </div>
+              {onLogout && (
+                <button
+                  onClick={onLogout}
+                  className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
+                  title="Logout"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              )}
             </div>
-            <label className="block text-xs text-slate-400 mb-1">Switch Role (Demo):</label>
-            <select 
-              value={currentRole} 
-              onChange={(e) => onRoleChange(e.target.value as UserRole)}
-              className="w-full bg-slate-900 border border-slate-600 text-white text-sm rounded px-2 py-1 focus:outline-none focus:border-blue-500"
-            >
-              {Object.values(UserRole).map(role => (
-                <option key={role} value={role}>{role}</option>
-              ))}
-            </select>
           </div>
         </div>
       </aside>

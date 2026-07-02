@@ -1,4 +1,5 @@
 const { google } = require('googleapis');
+const { Readable } = require('stream');
 
 // Configure SSL for Google APIs
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
@@ -176,6 +177,8 @@ class GoogleSheetsService {
           sellingPrice: item['sellingprice'] || 0,
           supplier: item['supplier'] || '',
           lastMovement: item['lastmovement'] || '',
+          imageUrl: item['imageurl'] || '',
+          imageFileId: item['imagefileid'] || '',
         };
 
         return this.calculateDerivedFields(inventoryItem);
@@ -204,7 +207,7 @@ class GoogleSheetsService {
       // Define headers
       const headers = [
         'ID', 'Name', 'SKU', 'Category', 'Brand', 'Quantity', 'MinLevel',
-        'UnitCost', 'SellingPrice', 'Supplier', 'LastMovement'
+        'UnitCost', 'SellingPrice', 'Supplier', 'LastMovement', 'ImageURL', 'ImageFileId'
       ];
 
       // Prepare data with core fields only (no calculated fields)
@@ -221,6 +224,8 @@ class GoogleSheetsService {
           item.sellingPrice || 0,
           item.supplier || '',
           item.lastMovement || '',
+          item.imageUrl || '',
+          item.imageFileId || '',
         ];
       });
 
@@ -369,6 +374,122 @@ class GoogleSheetsService {
       return inventory[itemIndex];
     } catch (error) {
       console.error('Error adjusting quantity:', error);
+      throw error;
+    }
+  }
+
+  // Upload image to Google Drive and return file ID and URL
+  async uploadImage(fileBuffer, fileName, mimeType, itemId) {
+    try {
+      console.log('=== Google Drive Upload Started ===');
+      console.log('Item ID:', itemId);
+      console.log('File:', fileName, mimeType);
+
+      // Use environment variable folder ID if available
+      const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+
+      if (!folderId) {
+        throw new Error('GOOGLE_DRIVE_FOLDER_ID not set. Please configure your Google Drive folder.');
+      }
+
+      console.log('Using Google Drive Folder:', folderId);
+
+      // Verify folder exists and is accessible
+      try {
+        await this.drive.files.get({
+          fileId: folderId,
+          fields: 'id,name',
+        });
+        console.log('✅ Folder is accessible');
+      } catch (folderError) {
+        console.error('❌ Folder not accessible:', folderError.message);
+        throw new Error('Google Drive folder not accessible. Make sure you shared the folder with: osren-inventory@osren-app.iam.gserviceaccount.com');
+      }
+
+      // Upload file to the folder
+      const stream = new Readable();
+      stream.push(fileBuffer);
+      stream.push(null); // Signal end of stream
+
+      console.log('Uploading file to Google Drive...');
+      const file = await this.drive.files.create({
+        resource: {
+          name: `${itemId}_${fileName}`,
+          parents: [folderId],
+        },
+        media: {
+          mimeType: mimeType,
+          body: stream,
+        },
+        fields: 'id,webContentLink,webViewLink',
+        supportsAllDrives: true,
+      });
+
+      const fileId = file.data.id;
+      const imageUrl = file.data.webContentLink || file.data.webViewLink;
+
+      console.log('✅ File uploaded to Google Drive');
+      console.log('File ID:', fileId);
+      console.log('Image URL:', imageUrl);
+
+      // Make file accessible via link
+      try {
+        await this.drive.permissions.create({
+          fileId: fileId,
+          resource: {
+            role: 'reader',
+            type: 'anyone',
+          },
+          supportsAllDrives: true,
+        });
+        console.log('✅ File permissions set to public');
+      } catch (permError) {
+        console.log('⚠️  Could not set public permissions:', permError.message);
+      }
+
+      return {
+        success: true,
+        fileId: fileId,
+        imageUrl: imageUrl,
+      };
+    } catch (error) {
+      console.error('=== Google Drive Upload Failed ===');
+      console.error('Error:', error.message);
+      throw error;
+    }
+  }
+
+  // Update inventory item with image information
+  async updateItemImage(itemId, imageFileId, imageUrl) {
+    try {
+      const inventory = await this.getInventory();
+      const itemIndex = inventory.findIndex(item => item.id === itemId);
+
+      if (itemIndex === -1) {
+        throw new Error('Item not found');
+      }
+
+      // Update item with image information
+      inventory[itemIndex].imageFileId = imageFileId;
+      inventory[itemIndex].imageUrl = imageUrl;
+
+      await this.updateInventory(inventory);
+      return inventory[itemIndex];
+    } catch (error) {
+      console.error('Error updating item image:', error);
+      throw error;
+    }
+  }
+
+  // Delete image from Google Drive
+  async deleteImage(fileId) {
+    try {
+      await this.drive.files.delete({
+        fileId: fileId,
+      });
+      return { success: true, message: 'Image deleted successfully' };
+    } catch (error) {
+      console.error('Error deleting image:', error);
       throw error;
     }
   }

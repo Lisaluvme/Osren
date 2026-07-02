@@ -1,6 +1,6 @@
 {
-  "name": "OSREN Integrated Ops Manager",
-  "short_name": "OSREN Ops",
+  "name": "GMP mobile sales app",
+  "short_name": "GMP Sales",
   "description": "Mobile inventory management system with Google integrations",
   "start_url": "/",
   "display": "standalone",

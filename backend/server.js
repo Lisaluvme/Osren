@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const path = require('path');
 
 // Load environment variables
 dotenv.config();
@@ -12,6 +13,27 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Serve static images from local storage
+app.use('/images', express.static(path.join(__dirname, 'public/images')));
+
+// Serve uploaded product images
+app.use('/api/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Ensure uploads directory exists
+const fs = require('fs');
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  console.log('✅ Created uploads directory');
+}
+
+// Ensure products upload directory exists
+const productsUploadDir = path.join(__dirname, 'uploads/products');
+if (!fs.existsSync(productsUploadDir)) {
+  fs.mkdirSync(productsUploadDir, { recursive: true });
+  console.log('✅ Created products upload directory');
+}
 
 // Import routes with error handling
 try {
@@ -89,6 +111,21 @@ try {
   console.log('✅ Orders routes loaded');
 } catch (error) {
   console.error('❌ Error loading orders routes:', error.message);
+}
+
+try {
+  app.use('/api/images', require('./routes/images'));
+  console.log('✅ Image routes loaded');
+} catch (error) {
+  console.error('❌ Error loading image routes:', error.message);
+}
+
+// Product routes
+try {
+  app.use('/api/products', require('./routes/productRoutes'));
+  console.log('✅ Product routes loaded');
+} catch (error) {
+  console.error('❌ Error loading product routes:', error.message);
 }
 
 // Health check

@@ -115,7 +115,7 @@ const FinanceModule: React.FC<FinanceModuleProps> = ({ currentRole }) => {
 
   // --- Render Views ---
 
-  const renderAccountsDashboard = () => {
+  const renderFinanceDashboard = () => {
     const cashflowData = generateCashflowFromOrders(orders);
     const recentOrders = orders.slice(0, 5); // Get 5 most recent orders
 
@@ -450,8 +450,8 @@ const FinanceModule: React.FC<FinanceModuleProps> = ({ currentRole }) => {
   );
 
   // Main Switch Logic
-  if (currentRole === UserRole.ACCOUNTS) {
-    return renderAccountsDashboard();
+  if (currentRole === UserRole.FINANCE) {
+    return renderFinanceDashboard();
   } else if (currentRole === UserRole.SALES) {
     return renderSalesDashboard();
   } else {

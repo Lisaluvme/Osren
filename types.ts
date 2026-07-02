@@ -1,9 +1,9 @@
 export enum UserRole {
-  ADMIN = 'Admin/Management',
-  ACCOUNTS = 'Accounts Officer',
-  SALES = 'Sales Rep',
-  WAREHOUSE = 'Warehouse Manager',
-  DRIVER = 'Logistics/Driver',
+  ADMIN = 'admin',
+  SALES = 'sales',
+  DRIVER = 'driver',
+  FINANCE = 'finance',
+  WAREHOUSE = 'warehouse',
 }
 
 export interface InventoryItem {
@@ -21,14 +21,76 @@ export interface InventoryItem {
   lowStockFlag?: number; // Calculated: IF(Quantity < MinLevel, 1, 0)
   supplier: string;
   lastMovement: string;
+  imageUrl?: string; // URL to product image stored in Google Drive or cloud storage
+  imageFileId?: string; // Google Drive file ID for the image
+  // New product image fields
+  image_url?: string; // Local upload image URL path
+  image_thumbnail_url?: string; // Thumbnail image URL path
+  has_image?: boolean; // Whether product has an uploaded image
 }
 
 export interface Invoice {
   id: string;
+  invoiceNumber?: string; // Auto-generated invoice number (e.g., INV-2024-001)
   clientName: string;
+  clientAddress?: string;
+  clientContact?: string;
+  clientEmail?: string;
   amount: number;
+  subtotal?: number; // Before tax and discounts
+  taxRate?: number; // Tax percentage (e.g., 0.06 for 6%)
+  taxAmount?: number; // Calculated tax amount
+  discountCode?: string; // Discount code applied
+  discountAmount?: number; // Discount amount deducted
+  discountPercentage?: number; // Discount percentage (e.g., 0.10 for 10%)
+  shippingCharges?: number; // Shipping or delivery charges
+  finalAmount?: number; // Final amount after all calculations
   dueDate: string;
-  status: 'Pending' | 'Approved' | 'Paid' | 'Overdue';
+  issueDate?: string; // When invoice was issued
+  status: 'Pending' | 'Approved' | 'Paid' | 'Overdue' | 'Draft' | 'Cancelled';
+  paymentTerms?: string; // Payment terms (e.g., 'Net 30', 'Due on Receipt')
+  paymentMethod?: string; // How payment was made/will be made
+  paidDate?: string; // When payment was received
+  notes?: string; // Additional invoice notes
+  items?: InvoiceItem[]; // Line items
+  companyInfo?: CompanyInfo; // Your company details
+  bankInfo?: BankInfo; // Bank details for payment
+  aging?: number; // Days overdue (calculated)
+  reminderSent?: boolean; // Payment reminder sent status
+  reminderCount?: number; // Number of reminders sent
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface InvoiceItem {
+  name: string;
+  description?: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number; // quantity * unitPrice
+  taxRate?: number; // Item-specific tax rate if different from invoice
+  discount?: number; // Item-specific discount
+  sku?: string; // Product SKU
+}
+
+export interface CompanyInfo {
+  name: string;
+  logo?: string; // URL to company logo
+  address: string;
+  contactNumber?: string;
+  email?: string;
+  website?: string;
+  taxId?: string; // Company tax ID / registration number
+  businessLicense?: string; // Business license number
+}
+
+export interface BankInfo {
+  bankName: string;
+  accountName: string;
+  accountNumber: string;
+  routingNumber?: string; // For international transfers
+  swiftCode?: string; // For international transfers
+  iban?: string; // International bank account number
 }
 
 export interface SalesOrder {

@@ -1,8 +1,10 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { InventoryItem } from '../types';
-import { AlertTriangle, Package, Upload, Download, Search, Filter, Plus, Minus, ShoppingCart, RefreshCw, Cloud } from 'lucide-react';
+import { AlertTriangle, Package, Upload, Download, Search, Filter, Plus, Minus, ShoppingCart, RefreshCw, Cloud, ExternalLink, X, Image as ImageIcon } from 'lucide-react';
 import { readExcel, writeExcel } from '../services/excelService';
 import inventoryApiService from '../services/api/inventoryApi';
+import ImageUpload from './ImageUpload';
+import { productApiService } from '../services/api/productApi';
 
 interface WarehouseModuleProps {
   inventory: InventoryItem[];
@@ -16,6 +18,8 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
   const [filterCategory, setFilterCategory] = useState('All');
   const [filterStatus, setFilterStatus] = useState('All');
   const [sortBy, setSortBy] = useState('name');
+  const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
+  const [imageModalOpen, setImageModalOpen] = useState(false);
 
   // Fetch inventory from Google Sheets (manual refresh only)
   const fetchInventoryFromSheets = useCallback(async () => {
@@ -135,6 +139,65 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
     writeExcel(inventory);
   };
 
+  // Image management functions
+  const openImageModal = (item: InventoryItem) => {
+    setSelectedItem(item);
+    setImageModalOpen(true);
+  };
+
+  const closeImageModal = () => {
+    setSelectedItem(null);
+    setImageModalOpen(false);
+  };
+
+  const handleImageUpdate = async (itemId: string, imageUrl: string, fileId: string) => {
+    // Update local inventory
+    const updatedInventory = inventory.map(item => {
+      if (item.id === itemId) {
+        return {
+          ...item,
+          imageUrl,
+          imageFileId: fileId
+        };
+      }
+      return item;
+    });
+    onInventoryChange(updatedInventory);
+
+    // Update the selected item
+    if (selectedItem && selectedItem.id === itemId) {
+      setSelectedItem({
+        ...selectedItem,
+        imageUrl,
+        imageFileId: fileId
+      });
+    }
+  };
+
+  const handleImageDelete = async (itemId: string) => {
+    // Update local inventory
+    const updatedInventory = inventory.map(item => {
+      if (item.id === itemId) {
+        return {
+          ...item,
+          imageUrl: '',
+          imageFileId: ''
+        };
+      }
+      return item;
+    });
+    onInventoryChange(updatedInventory);
+
+    // Update the selected item
+    if (selectedItem && selectedItem.id === itemId) {
+      setSelectedItem({
+        ...selectedItem,
+        imageUrl: '',
+        imageFileId: ''
+      });
+    }
+  };
+
   return (
     <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -160,6 +223,16 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
                         Sync failed
                     </div>
                 )}
+                <a
+                    href="https://docs.google.com/spreadsheets/d/1EzXFasyQxlhhDUCwTbhSc_Zxdm077xNNVvzznw0gwgk"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center px-3 py-2 text-sm font-medium text-green-600 bg-green-50 hover:bg-green-100 rounded-lg border border-green-300 transition-colors"
+                    title="Open Google Sheet in new tab"
+                >
+                    <ExternalLink className="w-4 h-4 mr-2" />
+                    Google Sheet
+                </a>
                 <button
                     onClick={fetchInventoryFromSheets}
                     disabled={syncing}
@@ -263,6 +336,7 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
                 <table className="w-full text-left">
                     <thead>
                         <tr className="text-xs text-slate-400 uppercase border-b border-slate-100 bg-slate-25">
+                            <th className="px-6 py-3 font-medium">Image</th>
                             <th className="px-6 py-3 font-medium">Product</th>
                             <th className="px-6 py-3 font-medium">SKU</th>
                             <th className="px-6 py-3 font-medium text-center">Stock Level</th>
@@ -289,6 +363,31 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
                                             : 'hover:bg-slate-50 border-l-4 border-l-transparent'
                                     }`}
                                 >
+                                    <td className="px-6 py-4">
+                                        <div className="relative w-16 h-16 rounded-lg overflow-hidden border-2 border-slate-200 bg-slate-50">
+                                            {(item.imageUrl || item.image_url) ? (
+                                                <img
+                                                    src={item.image_url ? productApiService.getImageUrl(item.image_url) : item.imageUrl}
+                                                    alt={item.name}
+                                                    className="w-full h-full object-cover cursor-pointer hover:opacity-80"
+                                                    onClick={() => openImageModal(item)}
+                                                    onError={(e) => {
+                                                        console.error('Failed to load image:', item.imageUrl || item.image_url);
+                                                        // Fallback to show placeholder
+                                                        (e.currentTarget as HTMLImageElement).style.display = 'none';
+                                                    }}
+                                                />
+                                            ) : (
+                                                <div
+                                                    onClick={() => openImageModal(item)}
+                                                    className="w-full h-full flex items-center justify-center cursor-pointer hover:bg-blue-50 transition-colors"
+                                                    title="Click to add image"
+                                                >
+                                                    <ImageIcon className="w-8 h-8 text-slate-300" />
+                                                </div>
+                                            )}
+                                        </div>
+                                    </td>
                                     <td className="px-6 py-4">
                                         <div className={`font-medium ${isCritical ? 'text-red-900' : 'text-slate-800'}`}>
                                             {item.name}
@@ -383,6 +482,97 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
                 )}
             </div>
         </div>
+
+        {/* Image Management Modal */}
+        {imageModalOpen && selectedItem && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                    <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
+                        <div>
+                            <h3 className="text-xl font-bold text-slate-800">Product Image Management</h3>
+                            <p className="text-sm text-slate-500">{selectedItem.name} ({selectedItem.sku})</p>
+                        </div>
+                        <button
+                            onClick={closeImageModal}
+                            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
+
+                    <div className="p-6">
+                        {/* Current Image Preview */}
+                        <div className="mb-6">
+                            <h4 className="text-sm font-semibold text-slate-700 mb-3">Current Image</h4>
+                            {selectedItem.imageUrl ? (
+                                <div className="relative w-full h-64 rounded-lg overflow-hidden border-2 border-slate-200 bg-slate-50">
+                                    <img
+                                        src={selectedItem.imageUrl}
+                                        alt={selectedItem.name}
+                                        className="w-full h-full object-contain"
+                                        onError={(e) => {
+                                            console.error('Failed to load modal image:', selectedItem.imageUrl);
+                                            e.currentTarget.style.display = 'none';
+                                            e.currentTarget.parentElement!.innerHTML = `
+                                                <div class="w-full h-64 flex items-center justify-center">
+                                                    <div class="text-center">
+                                                        <svg class="w-12 h-12 text-slate-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                                        </svg>
+                                                        <p class="text-sm text-slate-500">Failed to load image</p>
+                                                    </div>
+                                                </div>
+                                            `;
+                                        }}
+                                    />
+                                </div>
+                            ) : (
+                                <div className="w-full h-64 rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center">
+                                    <div className="text-center">
+                                        <Package className="w-12 h-12 text-slate-300 mx-auto mb-2" />
+                                        <p className="text-sm text-slate-500">No image uploaded</p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Image Upload */}
+                        <div>
+                            <h4 className="text-sm font-semibold text-slate-700 mb-3">Upload New Image</h4>
+                            <ImageUpload
+                                itemId={selectedItem.id}
+                                currentImage={selectedItem.imageUrl}
+                                onImageUpdate={(imageUrl, fileId) => handleImageUpdate(selectedItem.id, imageUrl, fileId)}
+                                onImageDelete={() => handleImageDelete(selectedItem.id)}
+                            />
+                        </div>
+
+                        {/* Item Details */}
+                        <div className="mt-6 p-4 bg-slate-50 rounded-lg">
+                            <h4 className="text-sm font-semibold text-slate-700 mb-2">Product Details</h4>
+                            <div className="grid grid-cols-2 gap-4 text-sm">
+                                <div>
+                                    <span className="text-slate-500">SKU:</span>
+                                    <span className="ml-2 font-medium text-slate-800">{selectedItem.sku}</span>
+                                </div>
+                                <div>
+                                    <span className="text-slate-500">Category:</span>
+                                    <span className="ml-2 font-medium text-slate-800">{selectedItem.category}</span>
+                                </div>
+                                <div>
+                                    <span className="text-slate-500">Brand:</span>
+                                    <span className="ml-2 font-medium text-slate-800">{selectedItem.brand}</span>
+                                </div>
+                                <div>
+                                    <span className="text-slate-500">Current Stock:</span>
+                                    <span className="ml-2 font-medium text-slate-800">{selectedItem.quantity} units</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
     </div>
   );
 };
