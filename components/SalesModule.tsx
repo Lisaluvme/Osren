@@ -26,9 +26,10 @@ interface Order {
 interface SalesModuleProps {
   inventory: InventoryItem[];
   onOrderPlaced?: (order: Order) => void;
+  onInventoryRefresh?: () => void;
 }
 
-const SalesModule: React.FC<SalesModuleProps> = ({inventory, onOrderPlaced}) => {
+const SalesModule: React.FC<SalesModuleProps> = ({inventory, onOrderPlaced, onInventoryRefresh}) => {
   const [recentOrders, setRecentOrders] = useState<Order[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
 
@@ -53,6 +54,11 @@ const SalesModule: React.FC<SalesModuleProps> = ({inventory, onOrderPlaced}) => 
     if (data.success) {
       // Refresh recent orders
       await fetchRecentOrders();
+
+      // Refresh inventory to show updated stock levels
+      if (onInventoryRefresh) {
+        await onInventoryRefresh();
+      }
 
       // Call the callback to navigate to Distribution with the new order
       if (onOrderPlaced && data.data) {
@@ -81,36 +87,6 @@ const SalesModule: React.FC<SalesModuleProps> = ({inventory, onOrderPlaced}) => 
 
   return (
     <div className="space-y-6 app-container">
-       {/* Modern App Header */}
-       <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 rounded-2xl p-6 text-white shadow-xl animate-fade-in">
-           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-               <div>
-                   <div className="flex items-center gap-3 mb-2">
-                       <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center animate-pulse-soft">
-                           <span className="text-2xl">🛒</span>
-                       </div>
-                       <div>
-                           <h2 className="text-2xl font-bold">Sales & Orders</h2>
-                           <p className="text-blue-100 text-sm">Manage your inventory and orders</p>
-                       </div>
-                   </div>
-                   <div className="flex gap-4 mt-3 md:mt-0">
-                       <div className="text-center">
-                           <p className="text-2xl font-bold">{inventory.length}</p>
-                           <p className="text-xs text-blue-200">Products</p>
-                       </div>
-                       <div className="text-center">
-                           <p className="text-2xl font-bold">{recentOrders.length}</p>
-                           <p className="text-xs text-blue-200">Recent Orders</p>
-                       </div>
-                   </div>
-               </div>
-               <button className="px-6 py-3 bg-white text-blue-600 rounded-xl font-bold hover:bg-blue-50 transition-all shadow-lg hover:scale-105 btn-press">
-                   + Quick Order
-               </button>
-           </div>
-       </div>
-
        {/* Product Catalog - Always Visible */}
        <div className="animate-slide-in-left stagger-1">
          <EnhancedCart

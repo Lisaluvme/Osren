@@ -201,7 +201,7 @@ const EnhancedCart: React.FC<EnhancedCartProps> = ({ inventory, onPlaceOrder, re
           </div>
 
           {/* Product Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
             {inventory.map((item, index) => {
               const inCart = cart.find(c => c.name === item.name);
               const cartQty = inCart?.qty || 0;
@@ -210,29 +210,29 @@ const EnhancedCart: React.FC<EnhancedCartProps> = ({ inventory, onPlaceOrder, re
               return (
                 <div
                   key={item.id}
-                  className={`group relative bg-white rounded-xl border-2 transition-all duration-300 overflow-hidden hover-lift smooth-transition ${staggerClass} ${
+                  className={`group relative bg-white rounded-lg border transition-all duration-300 overflow-hidden hover-lift smooth-transition ${staggerClass} ${
                     addedItem === item.name
-                      ? 'border-green-400 shadow-lg shadow-green-200 scale-105'
+                      ? 'border-green-400 shadow-md shadow-green-200 scale-105'
                       : inCart
-                      ? 'border-blue-200 shadow-md'
-                      : 'border-slate-100 hover:border-blue-300 hover:shadow-lg'
+                      ? 'border-blue-200 shadow-sm'
+                      : 'border-slate-100 hover:border-blue-300 hover:shadow-md'
                   }`}
                   style={{ animationDelay: `${index * 50}ms` }}
                 >
                   {/* Stock Status Badge */}
-                  <div className={`absolute top-3 right-3 px-2 py-1 rounded-full text-xs font-semibold ${
+                  <div className={`absolute top-2 right-2 px-1.5 py-0.5 rounded text-xs font-semibold ${
                     item.quantity > 10
                       ? 'bg-green-100 text-green-700'
                       : item.quantity > 5
                       ? 'bg-yellow-100 text-yellow-700'
                       : 'bg-red-100 text-red-700'
                   }`}>
-                    {item.quantity > 10 ? 'In Stock' : item.quantity > 5 ? 'Low Stock' : 'Critical'}
+                    {item.quantity > 10 ? '✓' : item.quantity > 5 ? '!' : '×'}
                   </div>
 
-                  <div className="p-4">
+                  <div className="p-2.5">
                     {/* Product Image/Icon */}
-                    <div className="w-full h-24 bg-gradient-to-br from-slate-50 to-slate-100 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
+                    <div className="w-full h-16 bg-gradient-to-br from-slate-50 to-slate-100 rounded mb-2 flex items-center justify-center overflow-hidden">
                       {(item.imageUrl || item.image_url) ? (
                         <img
                           src={item.image_url ? productApiService.getImageUrl(item.image_url) : item.imageUrl}
@@ -245,8 +245,8 @@ const EnhancedCart: React.FC<EnhancedCartProps> = ({ inventory, onPlaceOrder, re
                             if (parent) {
                               parent.innerHTML = `
                                 <div class="transform group-hover:scale-110 transition-transform duration-300">
-                                  <div class="w-10 h-10 flex items-center justify-center">
-                                    <svg class="w-10 h-10 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <div class="w-8 h-8 flex items-center justify-center">
+                                    <svg class="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                                     </svg>
                                   </div>
@@ -257,49 +257,49 @@ const EnhancedCart: React.FC<EnhancedCartProps> = ({ inventory, onPlaceOrder, re
                         />
                       ) : (
                         <div className="transform group-hover:scale-110 transition-transform duration-300">
-                          <ImageIcon className="w-10 h-10 text-slate-400" />
+                          <ImageIcon className="w-8 h-8 text-slate-400" />
                         </div>
                       )}
                     </div>
 
                     {/* Product Info */}
-                    <h4 className="font-semibold text-slate-800 mb-1 group-hover:text-blue-600 transition-colors">{item.name}</h4>
-                    <div className="flex justify-between items-center mb-3">
-                      <p className="text-lg font-bold text-blue-600">RM{item.sellingPrice.toFixed(2)}</p>
-                      <p className="text-xs text-slate-400">Stock: {item.quantity}</p>
+                    <h4 className="font-medium text-slate-800 mb-1 text-xs group-hover:text-blue-600 transition-colors line-clamp-2">{item.name}</h4>
+                    <div className="flex justify-between items-center mb-2">
+                      <p className="text-sm font-bold text-blue-600">RM{item.sellingPrice.toFixed(2)}</p>
+                      <p className="text-xs text-slate-400">{item.quantity}</p>
                     </div>
 
                     {/* Add to Cart Button */}
                     {inCart ? (
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
                         <button
                           onClick={() => removeFromCart(item.name)}
-                          className="flex-1 py-2 bg-red-500 text-white rounded-lg font-semibold hover:bg-red-600 transition-all btn-press flex items-center justify-center gap-1 smooth-transition"
+                          className="flex-1 py-1 bg-red-500 text-white rounded font-semibold hover:bg-red-600 transition-all btn-press flex items-center justify-center gap-0.5 smooth-transition"
                         >
-                          <Minus className="w-4 h-4" />
+                          <Minus className="w-3 h-3" />
                         </button>
-                        <div className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold animate-pulse-slow">
+                        <div className="px-2 py-1 bg-blue-600 text-white rounded font-bold text-xs animate-pulse-slow">
                           {cartQty}
                         </div>
                         <button
                           onClick={() => addToCart(item.name)}
                           disabled={cartQty >= item.quantity}
-                          className={`flex-1 py-2 text-white rounded-lg font-semibold transition-all btn-press flex items-center justify-center gap-1 smooth-transition ${
+                          className={`flex-1 py-1 text-white rounded font-semibold transition-all btn-press flex items-center justify-center gap-0.5 smooth-transition ${
                             cartQty >= item.quantity
                               ? 'bg-slate-300 cursor-not-allowed'
                               : 'bg-green-500 hover:bg-green-600 hover:scale-105'
                           }`}
                         >
-                          <Plus className="w-4 h-4" />
+                          <Plus className="w-3 h-3" />
                         </button>
                       </div>
                     ) : (
                       <button
                         onClick={() => addToCart(item.name)}
-                        className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-indigo-700 transition-all flex items-center justify-center gap-2 btn-press ripple hover-lift"
+                        className="w-full py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded font-semibold hover:from-blue-700 hover:to-indigo-700 transition-all flex items-center justify-center gap-1 btn-press ripple hover-lift text-xs"
                       >
-                        <ShoppingCart className="w-4 h-4" />
-                        Add to Cart
+                        <ShoppingCart className="w-3 h-3" />
+                        Add
                       </button>
                     )}
                   </div>
@@ -307,7 +307,7 @@ const EnhancedCart: React.FC<EnhancedCartProps> = ({ inventory, onPlaceOrder, re
                   {/* Added Animation */}
                   {addedItem === item.name && (
                     <div className="absolute inset-0 bg-green-500/10 flex items-center justify-center">
-                      <div className="bg-green-500 text-white px-3 py-1 rounded-full text-sm font-semibold animate-bounce">
+                      <div className="bg-green-500 text-white px-2 py-0.5 rounded text-xs font-semibold animate-bounce">
                         ✓ Added!
                       </div>
                     </div>

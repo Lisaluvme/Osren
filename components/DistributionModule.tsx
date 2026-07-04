@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { SalesOrder } from '../types';
-import { ArrowRight, FileCheck, Truck, FileText, PenTool, Eraser } from 'lucide-react';
+import { ArrowRight, FileCheck, Truck, FileText, PenTool, Eraser, Download, CheckCircle } from 'lucide-react';
+import { generateDeliveryOrderPDF } from '../services/deliveryOrderPDFService';
 
 interface DistributionModuleProps {
   newOrder?: SalesOrder | null;
@@ -202,6 +203,28 @@ const DistributionModule: React.FC<DistributionModuleProps> = ({newOrder}) => {
               // Update local state
               console.log('🎯 Updating local state for order:', id, '→ DO');
               setOrders(prev => prev.map(o => o.id === id ? { ...o, status: 'DO' } : o));
+
+              // Generate DO PDF
+              const order = orders.find(o => o.id === id);
+              if (order) {
+                try {
+                  console.log('📄 Generating DO PDF for order:', id);
+                  await generateDeliveryOrderPDF({
+                    id: order.id,
+                    clientName: order.clientName,
+                    items: order.items,
+                    total: order.total,
+                    date: order.date,
+                    deliveryAddress: data.data?.deliveryAddress,
+                    contactNumber: data.data?.contactNumber,
+                    notes: data.data?.notes
+                  });
+                  console.log('✅ DO PDF generated successfully');
+                } catch (pdfError) {
+                  console.error('⚠️ Failed to generate DO PDF:', pdfError);
+                  // Don't alert the user, the status update was successful
+                }
+              }
             } else {
               console.error('❌ Failed to update status:', data.error);
               alert(`Failed to update status: ${data.error}`);
@@ -211,6 +234,23 @@ const DistributionModule: React.FC<DistributionModuleProps> = ({newOrder}) => {
             alert(`Failed to update status: ${error.message}`);
           }
       }
+  };
+
+  const handleDownloadDO = async (order: SalesOrder) => {
+    try {
+      console.log('📄 Downloading DO PDF for order:', order.id);
+      await generateDeliveryOrderPDF({
+        id: order.id,
+        clientName: order.clientName,
+        items: order.items,
+        total: order.total,
+        date: order.date
+      });
+      console.log('✅ DO PDF downloaded successfully');
+    } catch (error) {
+      console.error('❌ Failed to download DO PDF:', error);
+      alert('Failed to generate DO PDF. Please try again.');
+    }
   };
 
   return (
@@ -281,9 +321,17 @@ const DistributionModule: React.FC<DistributionModuleProps> = ({newOrder}) => {
                         </button>
                     )}
                     {order.status === 'DO' && (
-                        <button disabled className="bg-blue-100 text-blue-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center cursor-default border border-blue-200">
-                            <Truck className="w-4 h-4 mr-2" /> In Delivery
-                        </button>
+                        <>
+                            <button disabled className="bg-blue-100 text-blue-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center cursor-default border border-blue-200 mr-2">
+                                <Truck className="w-4 h-4 mr-2" /> In Delivery
+                            </button>
+                            <button
+                                onClick={() => handleDownloadDO(order)}
+                                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center"
+                            >
+                                <Download className="w-4 h-4 mr-2" /> Download DO PDF
+                            </button>
+                        </>
                     )}
                     {order.status === 'Invoiced' && (
                         <button disabled className="bg-yellow-100 text-yellow-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center cursor-default border border-yellow-200">
@@ -317,8 +365,5 @@ const StatusStep = ({ active, completed, icon: Icon, label }: any) => (
         <span className="text-[10px] font-medium mt-1">{label}</span>
     </div>
 );
-
-// Helper for icon
-import { CheckCircle } from 'lucide-react';
 
 export default DistributionModule;

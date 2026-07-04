@@ -12,7 +12,8 @@ import {
   X,
   User,
   LogOut,
-  MessageSquare
+  MessageSquare,
+  Settings
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -25,7 +26,7 @@ interface LayoutProps {
 }
 
 const IconMap: Record<string, React.FC<any>> = {
-  PieChart, FileText, Workflow, Package, Briefcase, Truck, MessageSquare
+  PieChart, FileText, Workflow, Package, Briefcase, Truck, MessageSquare, Settings
 };
 
 const Layout: React.FC<LayoutProps> = ({

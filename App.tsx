@@ -8,6 +8,7 @@ import WarehouseModule from './components/WarehouseModule';
 import SalesModule from './components/SalesModule';
 import DeliveryModule from './components/DeliveryModule';
 import ChatbotModule from './components/ChatbotModule';
+import SettingsModule from './components/SettingsModule';
 import FloatingChatbot from './components/FloatingChatbot';
 import { UserRole, InventoryItem, SalesOrder } from './types';
 import inventoryService from './services/inventoryService';
@@ -93,7 +94,8 @@ const App: React.FC = () => {
     setActiveModule('sales'); // Reset to sales
   };
 
-  const handleOrderPlaced = (order: any) => {
+  // Handle order placement - navigate to Distribution with new order
+  const handleOrderPlaced = async (order: any) => {
     // Transform order to match DistributionModule's expected SalesOrder format
     const transformedOrder: SalesOrder = {
       id: order.id,
@@ -109,6 +111,10 @@ const App: React.FC = () => {
     };
 
     setNewOrder(transformedOrder);
+
+    // Refresh inventory to show updated stock levels after order placement
+    await loadInventory();
+
     // Navigate to Distribution (not Accounts, since Distribution is the workflow)
     setActiveModule('distribution');
   };
@@ -152,11 +158,13 @@ const App: React.FC = () => {
       case 'warehouse':
         return <WarehouseModule inventory={inventory} onInventoryChange={handleInventoryChange} />;
       case 'sales':
-        return <SalesModule inventory={inventory} onOrderPlaced={handleOrderPlaced} />;
+        return <SalesModule inventory={inventory} onOrderPlaced={handleOrderPlaced} onInventoryRefresh={loadInventory} />;
       case 'delivery':
         return <DeliveryModule />;
       case 'chatbot':
         return <ChatbotModule />;
+      case 'settings':
+        return <SettingsModule />;
       default:
         return <WarehouseModule inventory={inventory} onInventoryChange={handleInventoryChange} />;
     }

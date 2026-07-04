@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { optimizeRouteSequence } from '../services/geminiService';
 import { DeliveryRoute } from '../types';
-import { MapPin, Navigation, Compass, Layers, Package, RefreshCw, Clock, Phone, PenTool, Eraser, FileText } from 'lucide-react';
+import { generateDeliveryOrderPDF } from '../services/deliveryOrderPDFService';
+import { MapPin, Navigation, Compass, Layers, Package, RefreshCw, Clock, Phone, PenTool, Eraser, FileText, Download } from 'lucide-react';
 
 interface Order {
   id: string;
@@ -184,6 +185,30 @@ const DeliveryModule: React.FC = () => {
      }
   };
 
+  const handleDownloadDO = async (stop: DeliveryStop) => {
+    try {
+      console.log('📄 Downloading DO PDF for order:', stop.originalOrder.id);
+      await generateDeliveryOrderPDF({
+        id: stop.originalOrder.id,
+        clientName: stop.originalOrder.clientName,
+        items: stop.originalOrder.items.map(item => ({
+          name: item.name,
+          qty: item.quantity,
+          price: 0 // Price will be calculated from total
+        })),
+        total: stop.originalOrder.totalAmount,
+        date: stop.originalOrder.createdAt,
+        deliveryAddress: stop.originalOrder.deliveryAddress,
+        contactNumber: stop.originalOrder.contactNumber,
+        notes: stop.originalOrder.notes
+      });
+      console.log('✅ DO PDF downloaded successfully');
+    } catch (error) {
+      console.error('❌ Failed to download DO PDF:', error);
+      alert('Failed to generate DO PDF. Please try again.');
+    }
+  };
+
   return (
     <div className="space-y-6">
         <div className="flex justify-between items-center">
@@ -307,6 +332,12 @@ const DeliveryModule: React.FC = () => {
                                             RM {stop.originalOrder.totalAmount.toFixed(2)}
                                         </p>
                                         <div className="flex gap-2">
+                                            <button
+                                                onClick={() => handleDownloadDO(stop)}
+                                                className="flex items-center text-green-600 hover:text-green-800 text-sm font-medium bg-green-50 px-3 py-1.5 rounded transition-colors"
+                                            >
+                                                <Download className="w-4 h-4 mr-1.5" /> DO PDF
+                                            </button>
                                             {stop.status !== 'Delivered' && (
                                                 <button
                                                     onClick={() => markAsDelivered(stop.id)}
