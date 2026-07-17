@@ -1,77 +1,74 @@
-import React, { useState } from 'react';
-import { UserRole } from '../types';
+import React, { useState, useEffect } from 'react';
+import {
+  auth,
+  googleProvider,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+} from '../services/firebase';
 
 interface LoginPageProps {
-  onLogin: (role: UserRole, userInfo: { name: string; email: string }) => void;
+  /** Error surfaced from the backend session check (e.g. not provisioned). */
+  serverError?: string;
 }
 
-const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
+const friendlyError = (code?: string, fallback?: string): string => {
+  switch (code) {
+    case 'auth/invalid-credential':
+    case 'auth/wrong-password':
+    case 'auth/user-not-found':
+    case 'auth/invalid-email':
+      return 'Invalid email or password.';
+    case 'auth/too-many-requests':
+      return 'Too many failed attempts. Try again later or reset your password.';
+    case 'auth/unauthorized-domain':
+      return 'This domain is not authorized for Google sign-in. Add it in the Firebase console.';
+    case 'auth/popup-closed-by-user':
+    case 'auth/cancelled-popup-request':
+      return 'Google sign-in was cancelled.';
+    case 'auth/network-request-failed':
+      return 'Network error. Check your connection and try again.';
+    default:
+      return fallback || 'Sign-in failed. Please try again.';
+  }
+};
+
+const LoginPage: React.FC<LoginPageProps> = ({ serverError }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [localError, setLocalError] = useState('');
 
-  // Email to role mapping
-  const emailRoleMap: Record<string, { role: UserRole; name: string }> = {
-    'admin@osren.com': { role: UserRole.ADMIN, name: 'System Administrator' },
-    'sales@osren.com': { role: UserRole.SALES, name: 'Sales Representative' },
-    'driver@osren.com': { role: UserRole.DRIVER, name: 'Delivery Driver' },
-    'finance@osren.com': { role: UserRole.FINANCE, name: 'Finance Manager' },
-    'warehouse@osren.com': { role: UserRole.WAREHOUSE, name: 'Warehouse Manager' }
-  };
+  // Reset the spinner if the backend rejects the session (e.g. not provisioned).
+  useEffect(() => {
+    if (serverError) setLoading(false);
+  }, [serverError]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLocalError('');
     setLoading(true);
-    setError('');
-
-    // Simulate API call
-    setTimeout(() => {
-      // Simple validation for demo
-      if (!email || !password) {
-        setError('Please fill in all fields');
-        setLoading(false);
-        return;
-      }
-
-      // Email validation
-      if (!email.includes('@') || !email.includes('.')) {
-        setError('Please enter a valid email address');
-        setLoading(false);
-        return;
-      }
-
-      // Password validation (at least 8 characters)
-      if (password.length < 8) {
-        setError('Password must be at least 8 characters');
-        setLoading(false);
-        return;
-      }
-
-      // Get role from email
-      const userRole = emailRoleMap[email.toLowerCase()];
-
-      if (!userRole) {
-        setError('User not found. Please use a valid email address.');
-        setLoading(false);
-        return;
-      }
-
-      // Success - call onLogin
-      onLogin(userRole.role, {
-        name: userRole.name,
-        email: email
-      });
-
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      // App's onAuthStateChanged listener hydrates the session from here.
+      // On success this component unmounts; no need to reset loading.
+    } catch (err: any) {
+      setLocalError(friendlyError(err?.code, err?.message));
       setLoading(false);
-    }, 800);
+    }
   };
 
-  const fillCredentials = (userEmail: string) => {
-    setEmail(userEmail);
-    setPassword('Password123');
-    setError('');
+  const handleGoogle = async () => {
+    setLocalError('');
+    setLoading(true);
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (err: any) {
+      setLocalError(friendlyError(err?.code, err?.message));
+      setLoading(false);
+    }
   };
+
+  const displayError = localError || serverError;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
@@ -91,17 +88,15 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
         {/* Login Form */}
         <div className="bg-white rounded-xl shadow-xl p-8">
-          {error && (
+          {displayError && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-red-600 text-sm">{error}</p>
+              <p className="text-red-600 text-sm">{displayError}</p>
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Email Address
-              </label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Email Address</label>
               <input
                 type="email"
                 value={email}
@@ -114,9 +109,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Password
-              </label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
               <input
                 type="password"
                 value={password}
@@ -135,7 +128,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
             >
               {loading ? (
                 <>
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   Signing in...
                 </>
               ) : (
@@ -149,57 +142,31 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
             </button>
           </form>
 
-          {/* Quick Login Access */}
-          <div className="mt-6 pt-6 border-t border-slate-200">
-            <h3 className="text-sm font-semibold text-slate-700 mb-3">Quick Login Access</h3>
-            <div className="space-y-2">
-              <button
-                onClick={() => fillCredentials('admin@osren.com')}
-                className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 text-slate-700 hover:border-blue-300 hover:bg-blue-50 transition-colors text-left flex items-center gap-2"
-              >
-                <span className="w-2 h-2 rounded-full bg-red-500"></span>
-                Admin Login (Full Access)
-              </button>
-              <button
-                onClick={() => fillCredentials('sales@osren.com')}
-                className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 text-slate-700 hover:border-blue-300 hover:bg-blue-50 transition-colors text-left flex items-center gap-2"
-              >
-                <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                Sales Login (Sales & Distribution)
-              </button>
-              <button
-                onClick={() => fillCredentials('finance@osren.com')}
-                className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 text-slate-700 hover:border-blue-300 hover:bg-blue-50 transition-colors text-left flex items-center gap-2"
-              >
-                <span className="w-2 h-2 rounded-full bg-purple-500"></span>
-                Finance Login (Finance & Accounts)
-              </button>
-              <button
-                onClick={() => fillCredentials('warehouse@osren.com')}
-                className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 text-slate-700 hover:border-blue-300 hover:bg-blue-50 transition-colors text-left flex items-center gap-2"
-              >
-                <span className="w-2 h-2 rounded-full bg-orange-500"></span>
-                Warehouse Login (Warehouse Management)
-              </button>
-              <button
-                onClick={() => fillCredentials('driver@osren.com')}
-                className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 text-slate-700 hover:border-blue-300 hover:bg-blue-50 transition-colors text-left flex items-center gap-2"
-              >
-                <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                Driver Login (Delivery Only)
-              </button>
-            </div>
+          {/* Divider */}
+          <div className="flex items-center my-6">
+            <div className="flex-1 h-px bg-slate-200" />
+            <span className="px-3 text-xs text-slate-400">OR</span>
+            <div className="flex-1 h-px bg-slate-200" />
           </div>
 
-          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-xs text-blue-800">
-              <strong>💡 Tip:</strong> Each role has specific module access: Sales (Sales & Distribution), Finance (Finance & Accounts), Warehouse (Warehouse Management), Driver (Delivery Only). Click any quick login button to auto-fill credentials.
-            </p>
-          </div>
+          {/* Google sign-in */}
+          <button
+            onClick={handleGoogle}
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-3 bg-white border border-slate-300 text-slate-700 py-3 rounded-lg font-medium hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <svg className="w-5 h-5" viewBox="0 0 24 24">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+            </svg>
+            Sign in with Google
+          </button>
 
-          <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+          <div className="mt-6 p-3 bg-amber-50 border border-amber-200 rounded-lg">
             <p className="text-xs text-amber-800">
-              <strong>⚠️ Demo Mode:</strong> This is a demo login page. In production, this will connect to your authentication API with real user credentials.
+              <strong>First time?</strong> User accounts and roles are created by an administrator. Contact your admin if you can’t sign in.
             </p>
           </div>
         </div>

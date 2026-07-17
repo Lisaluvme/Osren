@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
-const { authenticate } = require('../middleware/authMiddleware');
+const { authenticate, authenticateFirebase } = require('../middleware/authMiddleware');
 const { validateBody, validateEmailField, validatePasswordField } = require('../middleware/validationMiddleware');
 
 // Public routes
+router.get('/session', authenticateFirebase, authController.getSession);
 router.post(
   '/register',
   validateBody(['email', 'password', 'full_name']),

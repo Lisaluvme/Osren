@@ -75,8 +75,14 @@ module.exports = (sequelize, DataTypes) => {
       }
     },
     password_hash: {
+      // Nullable: Firebase-only users have no local password.
       type: DataTypes.STRING(255),
-      allowNull: false
+      allowNull: true
+    },
+    firebase_uid: {
+      type: DataTypes.STRING(128),
+      allowNull: true,
+      unique: true
     },
     full_name: {
       type: DataTypes.STRING(255),

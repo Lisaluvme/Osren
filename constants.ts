@@ -42,5 +42,6 @@ export const MENU_ITEMS = [
   { id: 'sales', label: 'Sales & CRM', icon: 'Briefcase', roles: [UserRole.ADMIN, UserRole.SALES] },
   { id: 'delivery', label: 'Delivery', icon: 'Truck', roles: [UserRole.ADMIN, UserRole.DRIVER] },
   { id: 'chatbot', label: 'AI Assistant', icon: 'MessageSquare', roles: [UserRole.ADMIN, UserRole.SALES, UserRole.DRIVER, UserRole.FINANCE, UserRole.WAREHOUSE] },
+  { id: 'users', label: 'User Management', icon: 'Users', roles: [UserRole.ADMIN, UserRole.SALES, UserRole.FINANCE, UserRole.WAREHOUSE] },
   { id: 'settings', label: 'Settings', icon: 'Settings', roles: [UserRole.ADMIN] },
 ];

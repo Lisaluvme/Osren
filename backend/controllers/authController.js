@@ -109,6 +109,27 @@ class AuthController {
       message: 'Logged out successfully'
     });
   });
+
+  /**
+   * Firebase session hydration — returns the authenticated user + role.
+   * `authenticateFirebase` has already populated `req.user`.
+   */
+  getSession = asyncHandler(async (req, res) => {
+    const { id, email, full_name, firebase_uid, is_active } = req.user;
+    res.json({
+      success: true,
+      data: {
+        id,
+        email,
+        full_name,
+        firebase_uid,
+        is_active,
+        role: req.user.role
+          ? { id: req.user.role.id, name: req.user.role.name, display_name: req.user.role.display_name }
+          : null
+      }
+    });
+  });
 }
 
 module.exports = new AuthController();

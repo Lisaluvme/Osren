@@ -128,6 +128,14 @@ try {
   console.error('❌ Error loading product routes:', error.message);
 }
 
+// User management routes (Firebase-authenticated)
+try {
+  app.use('/api/users', require('./routes/userRoutes'));
+  console.log('✅ User management routes loaded');
+} catch (error) {
+  console.error('❌ Error loading user management routes:', error.message);
+}
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'OK', message: 'Server is running' });
