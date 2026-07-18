@@ -6,6 +6,20 @@ export enum UserRole {
   WAREHOUSE = 'warehouse',
 }
 
+export interface Bill {
+  id: string;
+  vendor_name: string;
+  invoice_ref: string | null;
+  category: string | null;
+  amount: number;
+  issue_date: string | null;
+  due_date: string;
+  status: 'pending' | 'paid';
+  payment_date: string | null;
+  payment_method: string | null;
+  notes: string | null;
+}
+
 export interface InventoryItem {
   id: string;
   name: string;

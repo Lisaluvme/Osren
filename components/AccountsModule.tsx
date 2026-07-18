@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Invoice, SalesOrder } from '../types';
-import { Filter, CheckCircle, AlertCircle, Clock, RefreshCw, DollarSign, Receipt, X } from 'lucide-react';
+import { Invoice, SalesOrder, Bill } from '../types';
+import { Filter, CheckCircle, AlertCircle, Clock, RefreshCw, DollarSign, Receipt, X, Plus, Trash2 } from 'lucide-react';
+import { billsApi } from '../services/api/billsApi';
 import InvoiceActions from './invoices/InvoiceActions';
 import { generateInvoicePDF } from '../services/invoicePDFService';
 import { generateReceiptPDF } from '../services/receiptPDFService';
@@ -27,10 +28,26 @@ const AccountsModule: React.FC<AccountsModuleProps> = ({newOrder}) => {
   });
   const [isGeneratingReceipt, setIsGeneratingReceipt] = useState(false);
 
+  // Accounts Payable (AP) state
+  const [view, setView] = useState<'receivable' | 'payable'>('receivable');
+  const [bills, setBills] = useState<Bill[]>([]);
+  const [billsLoading, setBillsLoading] = useState(false);
+  const [billFilter, setBillFilter] = useState<string>('All');
+  const [showBillModal, setShowBillModal] = useState(false);
+  const [billError, setBillError] = useState('');
+  const [savingBill, setSavingBill] = useState(false);
+  const [billForm, setBillForm] = useState({
+    vendor_name: '', invoice_ref: '', category: '', amount: '', issue_date: '', due_date: '', notes: ''
+  });
+
   // Fetch real orders from backend on component mount and when new order is placed
   useEffect(() => {
     fetchOrders();
   }, [newOrder]); // Re-fetch when newOrder changes
+
+  useEffect(() => {
+    if (view === 'payable') fetchBills();
+  }, [view]);
 
   const fetchOrders = async () => {
     try {
@@ -326,7 +343,78 @@ const AccountsModule: React.FC<AccountsModuleProps> = ({newOrder}) => {
     }
   };
 
+  // ===== Accounts Payable handlers =====
+  const fetchBills = async () => {
+    try {
+      setBillsLoading(true);
+      setBills(await billsApi.list());
+    } catch (error) {
+      console.error('Accounts: Error fetching bills:', error);
+      setBills([]);
+    } finally {
+      setBillsLoading(false);
+    }
+  };
+
+  const openBillModal = () => {
+    setBillForm({ vendor_name: '', invoice_ref: '', category: '', amount: '', issue_date: '', due_date: '', notes: '' });
+    setBillError('');
+    setShowBillModal(true);
+  };
+
+  const addBill = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBillError('');
+    if (!billForm.vendor_name || !billForm.amount || !billForm.due_date) {
+      setBillError('Vendor, amount and due date are required.');
+      return;
+    }
+    setSavingBill(true);
+    try {
+      await billsApi.create({
+        vendor_name: billForm.vendor_name,
+        invoice_ref: billForm.invoice_ref || undefined,
+        category: billForm.category || undefined,
+        amount: parseFloat(billForm.amount),
+        issue_date: billForm.issue_date || undefined,
+        due_date: billForm.due_date,
+        notes: billForm.notes || undefined
+      });
+      setShowBillModal(false);
+      await fetchBills();
+    } catch (error: any) {
+      setBillError(error?.response?.data?.error || 'Failed to add bill.');
+    } finally {
+      setSavingBill(false);
+    }
+  };
+
+  const markBillPaid = async (id: string) => {
+    try { await billsApi.update(id, { status: 'paid' }); await fetchBills(); }
+    catch (error) { console.error(error); alert('Failed to update bill.'); }
+  };
+
+  const reopenBill = async (id: string) => {
+    try { await billsApi.update(id, { status: 'pending' }); await fetchBills(); }
+    catch (error) { console.error(error); alert('Failed to update bill.'); }
+  };
+
+  const deleteBill = async (id: string) => {
+    if (!window.confirm('Delete this bill? This cannot be undone.')) return;
+    try { await billsApi.remove(id); await fetchBills(); }
+    catch (error) { console.error(error); alert('Failed to delete bill.'); }
+  };
+
   const filteredInvoices = filter === 'All' ? invoices : invoices.filter(inv => inv.status === filter);
+
+  // Derive a bill's display status: paid / pending / overdue (by due date).
+  const billDisplayStatus = (b: Bill): 'Paid' | 'Pending' | 'Overdue' => {
+    if (b.status === 'paid') return 'Paid';
+    const todayStr = new Date().toISOString().split('T')[0];
+    return b.due_date < todayStr ? 'Overdue' : 'Pending';
+  };
+  const filteredBills = billFilter === 'All' ? bills : bills.filter(b => billDisplayStatus(b) === billFilter);
+  const totalPayable = bills.filter(b => b.status !== 'paid').reduce((sum, b) => sum + Number(b.amount), 0);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -340,32 +428,74 @@ const AccountsModule: React.FC<AccountsModuleProps> = ({newOrder}) => {
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <h2 className="text-2xl font-bold text-slate-800">Accounts Payable & Receivable</h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-2xl font-bold text-slate-800">Accounts</h2>
+          <div className="flex items-center bg-white p-1 rounded-lg border border-slate-200">
+            <button
+              onClick={() => setView('receivable')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${view === 'receivable' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+            >
+              Receivable
+            </button>
+            <button
+              onClick={() => setView('payable')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${view === 'payable' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+            >
+              Payable
+            </button>
+          </div>
+        </div>
 
         <div className="flex items-center space-x-3">
-          <button
-            onClick={fetchOrders}
-            className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50"
-            disabled={loading}
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            <span>Refresh</span>
-          </button>
-
-          <div className="flex items-center space-x-2 bg-white p-1 rounded-lg border border-slate-200">
-            {['All', 'Paid', 'Pending', 'Overdue'].map(f => (
+          {view === 'receivable' ? (
+            <>
               <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${filter === f ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+                onClick={fetchOrders}
+                className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50"
+                disabled={loading}
               >
-                {f}
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                <span>Refresh</span>
               </button>
-            ))}
-          </div>
+              <div className="flex items-center space-x-2 bg-white p-1 rounded-lg border border-slate-200">
+                {['All', 'Paid', 'Pending', 'Overdue'].map(f => (
+                  <button
+                    key={f}
+                    onClick={() => setFilter(f)}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${filter === f ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              <span className="text-sm text-slate-500">Outstanding: <strong className="text-slate-800">RM {totalPayable.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></span>
+              <button
+                onClick={openBillModal}
+                className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-blue-600 border border-blue-600 rounded-lg hover:bg-blue-700"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Bill</span>
+              </button>
+              <div className="flex items-center space-x-2 bg-white p-1 rounded-lg border border-slate-200">
+                {['All', 'Paid', 'Pending', 'Overdue'].map(f => (
+                  <button
+                    key={f}
+                    onClick={() => setBillFilter(f)}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${billFilter === f ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </div>
 
+      <div className={view === 'receivable' ? '' : 'hidden'}>
       {loading ? (
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 flex items-center justify-center">
           <div className="text-center">
@@ -452,6 +582,129 @@ const AccountsModule: React.FC<AccountsModuleProps> = ({newOrder}) => {
             </div>
         )}
       </div>
+      )}
+      </div>
+
+      {/* ===== Accounts Payable ===== */}
+      <div className={view === 'payable' ? 'space-y-4' : 'hidden'}>
+        {billsLoading ? (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 flex items-center justify-center">
+            <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+          </div>
+        ) : bills.length === 0 ? (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 text-center text-slate-400">
+            No bills recorded yet. Click <strong>Add Bill</strong> to record a payable.
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs uppercase tracking-wider">
+                    <th className="p-4 font-semibold">Vendor</th>
+                    <th className="p-4 font-semibold">Invoice Ref</th>
+                    <th className="p-4 font-semibold">Category</th>
+                    <th className="p-4 font-semibold">Due Date</th>
+                    <th className="p-4 font-semibold text-right">Amount</th>
+                    <th className="p-4 font-semibold text-center">Status</th>
+                    <th className="p-4 font-semibold text-center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredBills.map((b) => {
+                    const st = billDisplayStatus(b);
+                    return (
+                      <tr key={b.id} className="hover:bg-blue-50 transition-colors">
+                        <td className="p-4 font-medium text-slate-700">{b.vendor_name}</td>
+                        <td className="p-4 text-slate-600">{b.invoice_ref || '—'}</td>
+                        <td className="p-4 text-slate-600">{b.category || '—'}</td>
+                        <td className="p-4 text-slate-600">{b.due_date}</td>
+                        <td className="p-4 text-right font-mono font-medium text-slate-800">
+                          RM {Number(b.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="p-4 text-center">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(st)}`}>
+                            {st === 'Overdue' && <AlertCircle className="w-3 h-3 mr-1" />}
+                            {st === 'Paid' && <CheckCircle className="w-3 h-3 mr-1" />}
+                            {st === 'Pending' && <Clock className="w-3 h-3 mr-1" />}
+                            {st}
+                          </span>
+                        </td>
+                        <td className="p-4 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            {st !== 'Paid' ? (
+                              <button onClick={() => markBillPaid(b.id)} className="px-2 py-1 text-xs font-medium text-green-600 bg-green-50 hover:bg-green-100 rounded border border-green-200 transition-colors">Mark Paid</button>
+                            ) : (
+                              <button onClick={() => reopenBill(b.id)} className="px-2 py-1 text-xs font-medium text-yellow-700 bg-yellow-50 hover:bg-yellow-100 rounded border border-yellow-200 transition-colors">Reopen</button>
+                            )}
+                            <button onClick={() => deleteBill(b.id)} className="px-2 py-1 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded border border-red-200 transition-colors flex items-center gap-1">
+                              <Trash2 className="w-3 h-3" />Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Add Bill modal */}
+      {showBillModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
+            <div className="flex items-center justify-between p-5 border-b border-slate-200">
+              <h2 className="text-lg font-semibold text-slate-800">Add Bill (Payable)</h2>
+              <button onClick={() => setShowBillModal(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={addBill} className="p-5 space-y-4">
+              {billError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">{billError}</div>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Vendor *</label>
+                  <input required value={billForm.vendor_name} onChange={(e) => setBillForm({ ...billForm, vendor_name: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="Supplier name" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Invoice Ref</label>
+                  <input value={billForm.invoice_ref} onChange={(e) => setBillForm({ ...billForm, invoice_ref: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="Vendor's bill #" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
+                  <input value={billForm.category} onChange={(e) => setBillForm({ ...billForm, category: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="e.g. Utilities" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Amount (RM) *</label>
+                  <input type="number" step="0.01" min="0" required value={billForm.amount} onChange={(e) => setBillForm({ ...billForm, amount: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="0.00" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Issue Date</label>
+                  <input type="date" value={billForm.issue_date} onChange={(e) => setBillForm({ ...billForm, issue_date: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Due Date *</label>
+                  <input type="date" required value={billForm.due_date} onChange={(e) => setBillForm({ ...billForm, due_date: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Notes</label>
+                <textarea value={billForm.notes} onChange={(e) => setBillForm({ ...billForm, notes: e.target.value })} rows={2} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" onClick={() => setShowBillModal(false)} className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">Cancel</button>
+                <button type="submit" disabled={savingBill} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50">
+                  {savingBill ? 'Saving…' : 'Add Bill'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* Order Details Modal */}

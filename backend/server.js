@@ -136,6 +136,14 @@ try {
   console.error('❌ Error loading user management routes:', error.message);
 }
 
+// Accounts Payable (vendor bills) — Firebase-authenticated
+try {
+  app.use('/api/bills', require('./routes/billRoutes'));
+  console.log('✅ Bills routes loaded');
+} catch (error) {
+  console.error('❌ Error loading bills routes:', error.message);
+}
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'OK', message: 'Server is running' });
