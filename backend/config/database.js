@@ -1,18 +1,12 @@
+const path = require('path');
+
 module.exports = {
   development: {
-    username: process.env.DB_USERNAME || 'postgres',
-    password: process.env.DB_PASSWORD || 'postgres',
-    database: process.env.DB_NAME || 'osren_ops_dev',
-    host: process.env.DB_HOST || 'localhost',
-    port: process.env.DB_PORT || 5432,
-    dialect: 'postgres',
-    logging: console.log,
-    pool: {
-      max: 5,
-      min: 0,
-      acquire: 30000,
-      idle: 10000
-    }
+    // Local testing uses a file-based SQLite DB (no Postgres install needed).
+    // Production stays on Postgres — see the `production` block below.
+    dialect: 'sqlite',
+    storage: process.env.DB_STORAGE || path.join(__dirname, '..', 'dev.sqlite'),
+    logging: false
   },
 
   test: {

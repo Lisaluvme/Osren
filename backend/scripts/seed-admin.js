@@ -36,8 +36,16 @@ async function run() {
   await sequelize.authenticate();
   console.log('✅ DB connected');
 
-  // Safety net: ensure the schema is ready.
-  await applyMigration();
+  // Create tables from models (creates everything on a fresh SQLite DB).
+  await sequelize.sync();
+  console.log('✅ Tables synced');
+
+  // On existing Postgres DBs, add the Firebase columns that predate this change.
+  if (sequelize.getDialect() === 'postgres') {
+    await applyMigration();
+  } else {
+    console.log('– SQLite: firebase_uid + status created via sync');
+  }
 
   // 1. Roles (this also corrects the legacy admin/manager/staff/viewer mismatch).
   for (const r of ROLES) {
