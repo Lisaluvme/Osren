@@ -15,6 +15,7 @@ function sanitizeUser(user) {
     full_name: u.full_name,
     firebase_uid: u.firebase_uid,
     is_active: u.is_active,
+    status: u.status,
     last_login: u.last_login,
     role: u.role ? { id: u.role.id, name: u.role.name, display_name: u.role.display_name } : null
   };
@@ -26,11 +27,13 @@ function sanitizeUser(user) {
  */
 async function listUsers(requesterRole) {
   const include = [{ model: Role, as: 'role' }];
+  // Pending users live in the approvals queue, not the main user list.
+  const where = { status: { [Op.in]: ['active', 'deactivated'] } };
   if (requesterRole !== 'admin') {
     include[0].required = true;
     include[0].where = { name: requesterRole };
   }
-  const users = await User.findAll({ include, order: [['created_at', 'DESC']] });
+  const users = await User.findAll({ where, include, order: [['created_at', 'DESC']] });
   return users.map(sanitizeUser);
 }
 
@@ -76,7 +79,8 @@ async function createUser({ email, password, full_name, role_name }) {
     firebase_uid: firebaseUser.uid,
     full_name,
     role_id: role.id,
-    is_active: true
+    is_active: true,
+    status: 'active'
   });
 
   const reloaded = await User.findByPk(user.id, { include: [{ model: Role, as: 'role' }] });
@@ -114,7 +118,10 @@ async function updateUser(id, patch, requesterRole) {
     user.role_id = role.id;
   }
 
-  if (patch.is_active !== undefined) user.is_active = patch.is_active;
+  if (patch.is_active !== undefined) {
+    user.is_active = patch.is_active;
+    user.status = patch.is_active ? 'active' : 'deactivated';
+  }
 
   await user.save();
 
@@ -140,11 +147,122 @@ async function deactivateUser(id, requesterRole) {
   return updateUser(id, { is_active: false }, requesterRole);
 }
 
+// Departments a user may request via self-registration (admin is excluded —
+// admins are seeded/created by admins only).
+const SELF_REG_ROLES = ['sales', 'finance', 'warehouse', 'driver'];
+
+/**
+ * Self-registration: create a PENDING user that cannot sign in until approved.
+ */
+async function registerPending({ email, full_name, requestedRoleName, firebaseUid }) {
+  const normalizedEmail = String(email).toLowerCase().trim();
+  if (!SELF_REG_ROLES.includes(requestedRoleName)) {
+    throw new AppError('Invalid requested department.', 400);
+  }
+  const role = await getRoleByName(requestedRoleName);
+  if (!role) {
+    throw new AppError('Invalid requested department.', 400);
+  }
+
+  const existing = await User.findOne({
+    where: { [Op.or]: [{ firebase_uid: firebaseUid }, { email: normalizedEmail }] },
+    include: [{ model: Role, as: 'role' }]
+  });
+  if (existing) {
+    if (existing.status === 'pending') {
+      throw new AppError('This email is already pending approval.', 409);
+    }
+    throw new AppError('This email is already registered. Please log in.', 409);
+  }
+
+  const user = await User.create({
+    email: normalizedEmail,
+    password_hash: null,
+    firebase_uid: firebaseUid,
+    full_name,
+    role_id: role.id,
+    is_active: false,
+    status: 'pending'
+  });
+  const reloaded = await User.findByPk(user.id, { include: [{ model: Role, as: 'role' }] });
+  return sanitizeUser(reloaded);
+}
+
+/**
+ * List users awaiting approval (admin only).
+ */
+async function listPending() {
+  const users = await User.findAll({
+    where: { status: 'pending' },
+    include: [{ model: Role, as: 'role' }],
+    order: [['created_at', 'DESC']]
+  });
+  return users.map(sanitizeUser);
+}
+
+/**
+ * Approve a pending user. Admin may confirm or change the department.
+ */
+async function approveUser(id, { role_name }) {
+  const user = await User.findByPk(id, { include: [{ model: Role, as: 'role' }] });
+  if (!user) throw new AppError('User not found', 404);
+  if (user.status !== 'pending') {
+    throw new AppError('Only pending users can be approved.', 400);
+  }
+  const targetRoleName = role_name || (user.role && user.role.name);
+  if (!targetRoleName) throw new AppError('A department (role_name) is required.', 400);
+  const role = await getRoleByName(targetRoleName);
+  if (!role) throw new AppError(`Unknown role: ${targetRoleName}`, 400);
+
+  user.role_id = role.id;
+  user.status = 'active';
+  user.is_active = true;
+  await user.save();
+
+  // Re-enable the Firebase account in case it had been disabled.
+  if (user.firebase_uid) {
+    try {
+      getAdmin().auth().updateUser(user.firebase_uid, { disabled: false });
+    } catch (_) {
+      /* ignore */
+    }
+  }
+
+  const reloaded = await User.findByPk(id, { include: [{ model: Role, as: 'role' }] });
+  return sanitizeUser(reloaded);
+}
+
+/**
+ * Reject a pending registration.
+ */
+async function rejectUser(id) {
+  const user = await User.findByPk(id, { include: [{ model: Role, as: 'role' }] });
+  if (!user) throw new AppError('User not found', 404);
+  if (user.status !== 'pending') {
+    throw new AppError('Only pending users can be rejected.', 400);
+  }
+  user.status = 'rejected';
+  user.is_active = false;
+  await user.save();
+  if (user.firebase_uid) {
+    try {
+      getAdmin().auth().updateUser(user.firebase_uid, { disabled: true });
+    } catch (_) {
+      /* ignore */
+    }
+  }
+  return sanitizeUser(user);
+}
+
 module.exports = {
   listUsers,
   createUser,
   updateUser,
   deactivateUser,
+  registerPending,
+  listPending,
+  approveUser,
+  rejectUser,
   getRoleByName,
   sanitizeUser
 };

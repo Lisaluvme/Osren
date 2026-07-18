@@ -33,6 +33,24 @@ async function applyMigration() {
   });
   console.log('✅ users.password_hash is now nullable');
 
+  // status column for the registration-approval workflow.
+  if (!table.status) {
+    await qi.addColumn('users', 'status', {
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: 'active'
+    });
+    console.log('✅ Added column users.status (default active)');
+  } else {
+    console.log('– users.status already exists');
+  }
+  // Backfill any legacy/NULL rows to active.
+  try {
+    await sequelize.query("UPDATE users SET status = 'active' WHERE status IS NULL");
+  } catch (_) {
+    /* ignore */
+  }
+
   // Unique index on firebase_uid (idempotent).
   try {
     await qi.addIndex('users', ['firebase_uid'], {

@@ -23,6 +23,8 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentRole }) => {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
   const [form, setForm] = useState({ email: '', full_name: '', password: '', role_name: '' });
+  const [pending, setPending] = useState<ManagedUser[]>([]);
+  const [pendingRole, setPendingRole] = useState<Record<string, string>>({});
 
   const isAdmin = currentRole === UserRole.ADMIN;
   // Department managers can only see/assign their own role.
@@ -32,7 +34,17 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentRole }) => {
     setLoading(true);
     setError('');
     try {
-      setUsers(await usersApi.list());
+      const [usersData, pendingData] = await Promise.all([
+        usersApi.list(),
+        isAdmin ? usersApi.pending().catch(() => []) : Promise.resolve([] as ManagedUser[]),
+      ]);
+      setUsers(usersData);
+      setPending(pendingData);
+      const roleMap: Record<string, string> = {};
+      pendingData.forEach((u) => {
+        roleMap[u.id] = u.role?.name || 'sales';
+      });
+      setPendingRole(roleMap);
     } catch (e: any) {
       setError(e?.response?.data?.error || 'Failed to load users.');
     } finally {
@@ -88,6 +100,24 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentRole }) => {
     }
   };
 
+  const approve = async (u: ManagedUser) => {
+    try {
+      await usersApi.approve(u.id, pendingRole[u.id] || u.role?.name || 'sales');
+      await load();
+    } catch (e: any) {
+      setError(e?.response?.data?.error || 'Failed to approve user.');
+    }
+  };
+
+  const reject = async (u: ManagedUser) => {
+    try {
+      await usersApi.reject(u.id);
+      await load();
+    } catch (e: any) {
+      setError(e?.response?.data?.error || 'Failed to reject user.');
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -113,6 +143,60 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentRole }) => {
 
       {error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">{error}</div>
+      )}
+
+      {isAdmin && pending.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-amber-200 overflow-hidden">
+          <div className="px-4 py-3 bg-amber-50 border-b border-amber-200">
+            <h2 className="font-semibold text-amber-800">Pending Approvals ({pending.length})</h2>
+            <p className="text-xs text-amber-700">New account requests awaiting your decision.</p>
+          </div>
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-slate-600 text-left">
+              <tr>
+                <th className="px-4 py-3 font-medium">Name</th>
+                <th className="px-4 py-3 font-medium">Email</th>
+                <th className="px-4 py-3 font-medium">Department</th>
+                <th className="px-4 py-3 font-medium text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {pending.map((u) => (
+                <tr key={u.id} className="hover:bg-slate-50">
+                  <td className="px-4 py-3 font-medium text-slate-800">{u.full_name}</td>
+                  <td className="px-4 py-3 text-slate-600">{u.email}</td>
+                  <td className="px-4 py-3">
+                    <select
+                      value={pendingRole[u.id] || u.role?.name || 'sales'}
+                      onChange={(e) => setPendingRole({ ...pendingRole, [u.id]: e.target.value })}
+                      className="px-2 py-1 border border-slate-300 rounded-lg text-sm bg-white"
+                    >
+                      {ALL_ROLES.filter((r) => r.value !== 'admin').map((r) => (
+                        <option key={r.value} value={r.value}>
+                          {r.label}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="px-4 py-3 text-right space-x-2">
+                    <button
+                      onClick={() => approve(u)}
+                      className="px-3 py-1 rounded-lg text-xs font-medium text-white bg-green-600 hover:bg-green-700 transition-colors"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => reject(u)}
+                      className="px-3 py-1 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50 border border-red-200 transition-colors"
+                    >
+                      Reject
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">

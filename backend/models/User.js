@@ -100,6 +100,18 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.BOOLEAN,
       defaultValue: true
     },
+    status: {
+      // Registration-approval lifecycle:
+      // pending = self-registered, awaiting admin approval
+      // active = approved / admin-created, can sign in
+      // deactivated / rejected = cannot sign in
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: 'active',
+      validate: {
+        isIn: [['pending', 'active', 'deactivated', 'rejected']]
+      }
+    },
     last_login: {
       type: DataTypes.DATE,
       allowNull: true

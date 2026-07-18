@@ -6,6 +6,7 @@ export interface ManagedUser {
   full_name: string;
   firebase_uid: string | null;
   is_active: boolean;
+  status: 'pending' | 'active' | 'deactivated' | 'rejected';
   last_login: string | null;
   role: { id: number; name: string; display_name: string } | null;
 }
@@ -42,5 +43,28 @@ export const usersApi = {
   deactivate: (id: string) =>
     apiClient
       .delete<{ success: boolean; data: ManagedUser }>(`/users/${id}`)
+      .then((r) => r.data.data),
+
+  // Self-registration (public) — caller must already hold a Firebase session,
+  // which the apiClient interceptor attaches automatically.
+  register: (payload: { full_name: string; requested_role: string }) =>
+    apiClient
+      .post<{ success: boolean; data: ManagedUser }>('/auth/signup', payload)
+      .then((r) => r.data.data),
+
+  // Approvals (admin)
+  pending: () =>
+    apiClient
+      .get<{ success: boolean; data: ManagedUser[] }>('/users/pending')
+      .then((r) => r.data.data),
+
+  approve: (id: string, role_name: string) =>
+    apiClient
+      .patch<{ success: boolean; data: ManagedUser }>(`/users/${id}/approve`, { role_name })
+      .then((r) => r.data.data),
+
+  reject: (id: string) =>
+    apiClient
+      .patch<{ success: boolean; data: ManagedUser }>(`/users/${id}/reject`)
       .then((r) => r.data.data),
 };

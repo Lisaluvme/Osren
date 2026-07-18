@@ -37,6 +37,22 @@ class UserController {
     const user = await userService.deactivateUser(req.params.id, req.userRole);
     res.json({ success: true, data: user });
   });
+
+  pending = asyncHandler(async (req, res) => {
+    const users = await userService.listPending();
+    res.json({ success: true, data: users });
+  });
+
+  approve = asyncHandler(async (req, res) => {
+    const { role_name } = req.body;
+    const user = await userService.approveUser(req.params.id, { role_name });
+    res.json({ success: true, data: user });
+  });
+
+  reject = asyncHandler(async (req, res) => {
+    const user = await userService.rejectUser(req.params.id);
+    res.json({ success: true, data: user });
+  });
 }
 
 module.exports = new UserController();

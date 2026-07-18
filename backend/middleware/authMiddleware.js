@@ -158,11 +158,20 @@ async function authenticateFirebase(req, res, next) {
       });
     }
 
-    if (!user.is_active) {
+    const status = user.status || 'active';
+    if (status === 'pending') {
+      return res.status(403).json({
+        success: false,
+        code: 'ACCOUNT_PENDING',
+        error: 'Your account is pending administrator approval. Please try again later.'
+      });
+    }
+    if (status !== 'active') {
+      // deactivated or rejected
       return res.status(403).json({
         success: false,
         code: 'ACCOUNT_DEACTIVATED',
-        error: 'Your account has been deactivated.'
+        error: 'Your account is not active. Contact an administrator.'
       });
     }
 

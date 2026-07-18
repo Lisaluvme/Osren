@@ -1,5 +1,7 @@
 const authService = require('../services/authService');
-const { asyncHandler } = require('../middleware/errorHandler');
+const { asyncHandler, AppError } = require('../middleware/errorHandler');
+const { getAdmin } = require('../services/firebaseAdmin');
+const userService = require('../services/userService');
 
 class AuthController {
   /**
@@ -129,6 +131,35 @@ class AuthController {
           : null
       }
     });
+  });
+
+  /**
+   * Public self-registration: verifies the caller's Firebase ID token and
+   * creates a PENDING user row. The account cannot sign in until an admin
+   * approves it and assigns/confirms the department.
+   */
+  registerPending = asyncHandler(async (req, res) => {
+    const { full_name, requested_role } = req.body;
+    if (!full_name || !requested_role) {
+      throw new AppError('full_name and requested_role are required', 400);
+    }
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      throw new AppError('Firebase ID token is required', 401);
+    }
+    const idToken = authHeader.substring(7);
+    const admin = getAdmin();
+    const decoded = await admin.auth().verifyIdToken(idToken);
+    if (!decoded.email) {
+      throw new AppError('Token has no email claim', 400);
+    }
+    const user = await userService.registerPending({
+      email: decoded.email,
+      full_name,
+      requestedRoleName: requested_role,
+      firebaseUid: decoded.uid
+    });
+    res.status(201).json({ success: true, data: user });
   });
 }
 

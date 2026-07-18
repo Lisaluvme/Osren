@@ -6,6 +6,9 @@ const { validateBody, validateEmailField, validatePasswordField } = require('../
 
 // Public routes
 router.get('/session', authenticateFirebase, authController.getSession);
+
+// Public Firebase self-registration → creates a PENDING user (no access until approved)
+router.post('/signup', authController.registerPending);
 router.post(
   '/register',
   validateBody(['email', 'password', 'full_name']),
