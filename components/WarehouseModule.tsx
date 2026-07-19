@@ -5,6 +5,7 @@ import { readExcel, writeExcel } from '../services/excelService';
 import inventoryApiService from '../services/api/inventoryApi';
 import ImageUpload from './ImageUpload';
 import { productApiService } from '../services/api/productApi';
+import GRNModal, { GRNData } from './GRNModal';
 
 interface WarehouseModuleProps {
   inventory: InventoryItem[];
@@ -20,6 +21,8 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
   const [sortBy, setSortBy] = useState('name');
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [imageModalOpen, setImageModalOpen] = useState(false);
+  const [grnModalOpen, setGrnModalOpen] = useState(false);
+  const [notification, setNotification] = useState({ show: false, message: '', type: 'success' as 'success' | 'error' });
 
   // Fetch inventory from Google Sheets (manual refresh only)
   const fetchInventoryFromSheets = useCallback(async () => {
@@ -135,6 +138,54 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
     }
   };
 
+  // GRN (Goods Received Note): receive stock for an existing item or create a new one.
+  // Lightweight: only stock/product fields persist (via addItem / adjustQuantity);
+  // GRN-meta (number, DO, remarks) is not stored.
+  const handleGRNSubmit = async (grn: GRNData) => {
+    setSyncing(true);
+    setSyncStatus('syncing');
+    try {
+      if (grn.itemType === 'existing' && grn.itemId) {
+        await inventoryApiService.adjustQuantity(grn.itemId, grn.quantityReceived);
+      } else if (grn.itemType === 'new' && grn.newItemData) {
+        const today = new Date().toISOString().split('T')[0];
+        const newItem = grn.newItemData;
+        await inventoryApiService.addItem({
+          name: newItem.name,
+          sku: newItem.sku,
+          category: newItem.category || 'General',
+          brand: newItem.brand || 'Unknown',
+          quantity: grn.quantityReceived,
+          unitCost: newItem.unitCost ?? grn.unitCost ?? 0,
+          sellingPrice: newItem.sellingPrice,
+          minLevel: newItem.minLevel ?? 10,
+          supplier: grn.supplier,
+          lastMovement: today,
+        });
+      } else {
+        throw new Error('Invalid GRN payload');
+      }
+
+      // Refresh inventory from the backend so the table reflects the change.
+      await fetchInventoryFromSheets();
+
+      const itemName = grn.itemType === 'existing' ? (grn.itemName || 'item') : (grn.newItemData?.name || 'new item');
+      setNotification({ show: true, message: `GRN ${grn.grnNumber} created — stock updated for ${itemName}.`, type: 'success' });
+      setSyncStatus('success');
+      setTimeout(() => setNotification(n => ({ ...n, show: false })), 3000);
+      setTimeout(() => setSyncStatus('idle'), 2000);
+    } catch (error: any) {
+      console.error('Failed to create GRN:', error);
+      setNotification({ show: true, message: error.message || 'Failed to create GRN. Please try again.', type: 'error' });
+      setSyncStatus('error');
+      setTimeout(() => setNotification(n => ({ ...n, show: false })), 4000);
+      setTimeout(() => setSyncStatus('idle'), 3000);
+      throw error; // let the modal show its inline error and stay open
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const handleExport = () => {
     writeExcel(inventory);
   };
@@ -205,6 +256,11 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
 
             {/* Google Sheets Sync Status */}
             <div className="flex items-center space-x-2">
+                {notification.show && (
+                    <span className={`px-3 py-2 text-sm font-medium rounded-lg border ${notification.type === 'success' ? 'bg-green-100 text-green-700 border-green-300' : 'bg-red-100 text-red-700 border-red-300'}`}>
+                        {notification.message}
+                    </span>
+                )}
                 {syncStatus === 'syncing' && (
                     <div className="flex items-center text-blue-600 text-sm">
                         <RefreshCw className="w-4 h-4 mr-1 animate-spin" />
@@ -304,6 +360,13 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
 
                     {/* Action Buttons */}
                     <div className="flex items-center space-x-2">
+                        <button
+                            onClick={() => setGrnModalOpen(true)}
+                            className="flex items-center px-3 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg border border-green-600 transition-colors"
+                            title="Receive stock or add a new item (Goods Received Note)"
+                        >
+                            <Package className="w-4 h-4 mr-2" /> Receive Stock (GRN)
+                        </button>
                         <button
                             onClick={handleExport}
                             className="flex items-center px-3 py-2 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg border border-slate-300 transition-colors"
@@ -573,6 +636,14 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
                 </div>
             </div>
         )}
+
+        {/* GRN (Add Item / Receive Stock) Modal */}
+        <GRNModal
+            isOpen={grnModalOpen}
+            onClose={() => setGrnModalOpen(false)}
+            onSubmit={handleGRNSubmit}
+            inventory={inventory}
+        />
     </div>
   );
 };
