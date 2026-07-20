@@ -1,11 +1,14 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { InventoryItem } from '../types';
-import { AlertTriangle, Package, Upload, Download, Search, Filter, Plus, Minus, ShoppingCart, RefreshCw, Cloud, ExternalLink, X, Image as ImageIcon } from 'lucide-react';
+import { AlertTriangle, Package, Upload, Download, Search, Filter, Plus, Minus, ShoppingCart, RefreshCw, Cloud, ExternalLink, X, Image as ImageIcon, Pencil, Trash2, LogOut, Clock } from 'lucide-react';
 import { readExcel, writeExcel } from '../services/excelService';
 import inventoryApiService from '../services/api/inventoryApi';
 import ImageUpload from './ImageUpload';
 import { productApiService } from '../services/api/productApi';
 import GRNModal, { GRNData } from './GRNModal';
+import EditItemModal from './EditItemModal';
+import StockIssueModal from './StockIssueModal';
+import StockHistoryModal from './StockHistoryModal';
 
 interface WarehouseModuleProps {
   inventory: InventoryItem[];
@@ -23,6 +26,9 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
   const [imageModalOpen, setImageModalOpen] = useState(false);
   const [grnModalOpen, setGrnModalOpen] = useState(false);
   const [notification, setNotification] = useState({ show: false, message: '', type: 'success' as 'success' | 'error' });
+  const [editItem, setEditItem] = useState<InventoryItem | null>(null);
+  const [issueItem, setIssueItem] = useState<InventoryItem | null>(null);
+  const [historyItem, setHistoryItem] = useState<InventoryItem | null>(null);
 
   // Fetch inventory from Google Sheets (manual refresh only)
   const fetchInventoryFromSheets = useCallback(async () => {
@@ -124,6 +130,10 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
       setSyncing(true);
       setSyncStatus('syncing');
       await inventoryApiService.adjustQuantity(itemId, adjustment);
+      const adjustedItem = inventory.find(i => i.id === itemId);
+      if (adjustedItem) {
+        logMovementBestEffort({ itemId, itemName: adjustedItem.name, sku: adjustedItem.sku, type: 'adjust', quantityChange: adjustment, newQuantity: Math.max(0, (adjustedItem.quantity || 0) + adjustment) });
+      }
       setSyncStatus('success');
       setTimeout(() => setSyncStatus('idle'), 2000);
       setSyncing(false);
@@ -145,12 +155,13 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
     setSyncing(true);
     setSyncStatus('syncing');
     try {
+      let created: InventoryItem | undefined;
       if (grn.itemType === 'existing' && grn.itemId) {
         await inventoryApiService.adjustQuantity(grn.itemId, grn.quantityReceived);
       } else if (grn.itemType === 'new' && grn.newItemData) {
         const today = new Date().toISOString().split('T')[0];
         const newItem = grn.newItemData;
-        await inventoryApiService.addItem({
+        created = await inventoryApiService.addItem({
           name: newItem.name,
           sku: newItem.sku,
           category: newItem.category || 'General',
@@ -169,6 +180,14 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
       // Refresh inventory from the backend so the table reflects the change.
       await fetchInventoryFromSheets();
 
+      // Best-effort movement log
+      if (grn.itemType === 'existing' && grn.itemId) {
+        const rcvItem = inventory.find(i => i.id === grn.itemId);
+        logMovementBestEffort({ itemId: grn.itemId, itemName: grn.itemName, sku: rcvItem?.sku, type: 'receive', quantityChange: grn.quantityReceived, newQuantity: (rcvItem?.quantity ?? 0) + grn.quantityReceived });
+      } else if (grn.newItemData) {
+        logMovementBestEffort({ itemId: created?.id || '', itemName: grn.newItemData.name, sku: grn.newItemData.sku, type: 'create', quantityChange: grn.quantityReceived, newQuantity: grn.quantityReceived });
+      }
+
       const itemName = grn.itemType === 'existing' ? (grn.itemName || 'item') : (grn.newItemData?.name || 'new item');
       setNotification({ show: true, message: `GRN ${grn.grnNumber} created — stock updated for ${itemName}.`, type: 'success' });
       setSyncStatus('success');
@@ -181,6 +200,88 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
       setTimeout(() => setNotification(n => ({ ...n, show: false })), 4000);
       setTimeout(() => setSyncStatus('idle'), 3000);
       throw error; // let the modal show its inline error and stay open
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  // Best-effort movement log — never lets logging fail the main operation.
+  const logMovementBestEffort = (entry: { itemId: string; itemName?: string; sku?: string; type: string; quantityChange: number; newQuantity: number; reason?: string }) => {
+    inventoryApiService.logMovement(entry).catch(e => console.error('Movement log failed (non-fatal):', e));
+  };
+
+  // Edit product details (syncs to Google Sheets via existing POST /inventory/update).
+  const handleEditSubmit = async (updates: Partial<InventoryItem>) => {
+    if (!editItem) return;
+    setSyncing(true);
+    setSyncStatus('syncing');
+    try {
+      await inventoryApiService.updateItem(editItem.id, updates);
+      await fetchInventoryFromSheets();
+      setNotification({ show: true, message: `${updates.name || editItem.name} updated.`, type: 'success' });
+      setSyncStatus('success');
+      setTimeout(() => setNotification(n => ({ ...n, show: false })), 3000);
+      setTimeout(() => setSyncStatus('idle'), 2000);
+    } catch (error: any) {
+      setNotification({ show: true, message: error.message || 'Failed to update item.', type: 'error' });
+      setSyncStatus('error');
+      setTimeout(() => setNotification(n => ({ ...n, show: false })), 4000);
+      setTimeout(() => setSyncStatus('idle'), 3000);
+      throw error;
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  // Issue / stock-out (negative adjust via existing POST /inventory/adjust; logs a movement with reason).
+  const handleIssueSubmit = async (quantity: number, reason: string) => {
+    if (!issueItem) return;
+    setSyncing(true);
+    setSyncStatus('syncing');
+    try {
+      await inventoryApiService.adjustQuantity(issueItem.id, -quantity);
+      logMovementBestEffort({
+        itemId: issueItem.id, itemName: issueItem.name, sku: issueItem.sku,
+        type: 'issue', quantityChange: -quantity, newQuantity: Math.max(0, issueItem.quantity - quantity), reason,
+      });
+      await fetchInventoryFromSheets();
+      setNotification({ show: true, message: `Issued ${quantity} of ${issueItem.name}.`, type: 'success' });
+      setSyncStatus('success');
+      setTimeout(() => setNotification(n => ({ ...n, show: false })), 3000);
+      setTimeout(() => setSyncStatus('idle'), 2000);
+    } catch (error: any) {
+      setNotification({ show: true, message: error.message || 'Failed to issue stock.', type: 'error' });
+      setSyncStatus('error');
+      setTimeout(() => setNotification(n => ({ ...n, show: false })), 4000);
+      setTimeout(() => setSyncStatus('idle'), 3000);
+      throw error;
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  // Delete product (syncs to Google Sheets via existing POST /inventory/delete).
+  const handleDelete = async (item: InventoryItem) => {
+    if (!window.confirm(`Delete "${item.name}" (${item.sku})? This removes it from the Google Sheet.`)) return;
+    setSyncing(true);
+    setSyncStatus('syncing');
+    try {
+      await inventoryApiService.deleteItem(item.id);
+      logMovementBestEffort({
+        itemId: item.id, itemName: item.name, sku: item.sku,
+        type: 'delete', quantityChange: -(item.quantity || 0), newQuantity: 0,
+      });
+      await fetchInventoryFromSheets();
+      setNotification({ show: true, message: `${item.name} deleted.`, type: 'success' });
+      setSyncStatus('success');
+      setTimeout(() => setNotification(n => ({ ...n, show: false })), 3000);
+      setTimeout(() => setSyncStatus('idle'), 2000);
+    } catch (error: any) {
+      console.error('Failed to delete item:', error);
+      setNotification({ show: true, message: error.message || 'Failed to delete item.', type: 'error' });
+      setSyncStatus('error');
+      setTimeout(() => setNotification(n => ({ ...n, show: false })), 4000);
+      setTimeout(() => setSyncStatus('idle'), 3000);
     } finally {
       setSyncing(false);
     }
@@ -491,33 +592,30 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
                                     </td>
                                     <td className="px-6 py-4 text-center">
                                         <div className="flex items-center justify-center space-x-1">
-                                            <button
-                                                onClick={() => adjustQuantity(item.id, -1)}
-                                                className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                                                title="Decrease stock"
-                                            >
+                                            <button onClick={() => adjustQuantity(item.id, -1)} className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors" title="Decrease stock">
                                                 <Minus className="w-4 h-4" />
                                             </button>
-                                            <span className="text-sm font-medium text-slate-600 mx-2">
-                                                Adjust
-                                            </span>
-                                            <button
-                                                onClick={() => adjustQuantity(item.id, 1)}
-                                                className="p-1 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
-                                                title="Increase stock"
-                                            >
+                                            <button onClick={() => adjustQuantity(item.id, 1)} className="p-1 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors" title="Increase stock">
                                                 <Plus className="w-4 h-4" />
                                             </button>
                                             {isLow && (
-                                                <button
-                                                    onClick={() => adjustQuantity(item.id, item.minLevel - item.quantity)}
-                                                    className="ml-3 px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition-colors"
-                                                    title="Quick reorder to minimum"
-                                                >
-                                                    <ShoppingCart className="w-3 h-3 inline mr-1" />
-                                                    Reorder
+                                                <button onClick={() => adjustQuantity(item.id, item.minLevel - item.quantity)} className="ml-2 px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition-colors" title="Quick reorder to minimum">
+                                                    <ShoppingCart className="w-3 h-3 inline mr-1" />Reorder
                                                 </button>
                                             )}
+                                            <span className="mx-1 text-slate-200">|</span>
+                                            <button onClick={() => setEditItem(item)} className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors" title="Edit item">
+                                                <Pencil className="w-4 h-4" />
+                                            </button>
+                                            <button onClick={() => setIssueItem(item)} className="p-1 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors" title="Issue stock (out)">
+                                                <LogOut className="w-4 h-4" />
+                                            </button>
+                                            <button onClick={() => setHistoryItem(item)} className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded transition-colors" title="Stock history">
+                                                <Clock className="w-4 h-4" />
+                                            </button>
+                                            <button onClick={() => handleDelete(item)} className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors" title="Delete item">
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
                                         </div>
                                     </td>
                                 </tr>
@@ -644,6 +742,10 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
             onSubmit={handleGRNSubmit}
             inventory={inventory}
         />
+
+        <EditItemModal item={editItem} onClose={() => setEditItem(null)} onSubmit={handleEditSubmit} />
+        <StockIssueModal item={issueItem} onClose={() => setIssueItem(null)} onSubmit={handleIssueSubmit} />
+        <StockHistoryModal item={historyItem} onClose={() => setHistoryItem(null)} />
     </div>
   );
 };

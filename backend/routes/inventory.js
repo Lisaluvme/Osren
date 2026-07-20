@@ -187,4 +187,118 @@ router.get('/search', checkServiceEnabled, async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Stock movement history — logged to a "Movements" tab in the same Google
+// Sheet. Reuses the service's public `sheets` client + `spreadsheetId`
+// (see backend/services/googleDriveService.js). Append pattern mirrors
+// backend/routes/orders.js. This is a separate log; it does NOT change how
+// add/update/delete/adjust persist the Inventory tab (still a full rewrite).
+// ---------------------------------------------------------------------------
+const MOVEMENTS_RANGE = 'Movements!A:I';
+const MOVEMENT_HEADERS = ['Timestamp', 'ItemID', 'ItemName', 'SKU', 'Type', 'QuantityChange', 'NewQuantity', 'Reason', 'PerformedBy'];
+let movementsTabReady = false;
+
+// Create the Movements tab + header on first use; no-op afterwards. Swallows
+// the "already exists" error so it is safe to call on every request.
+async function ensureMovementsTab() {
+  if (movementsTabReady) return;
+  const sheets = googleSheetsService.sheets;
+  const spreadsheetId = googleSheetsService.spreadsheetId;
+  if (!sheets || !spreadsheetId) throw new Error('Google Sheets not configured');
+
+  const writeHeader = async () => {
+    const existing = await sheets.spreadsheets.values.get({ spreadsheetId, range: 'Movements!A1:I1' });
+    if (!existing.data.values || existing.data.values.length === 0) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId, range: 'Movements!A1:I1', valueInputOption: 'RAW',
+        resource: { values: [MOVEMENT_HEADERS] },
+      });
+    }
+  };
+
+  try {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: { requests: [{ addSheet: { properties: { title: 'Movements', gridProperties: { rowCount: 1000, columnCount: 9 } } } }] },
+    });
+    await sheets.spreadsheets.values.update({
+      spreadsheetId, range: 'Movements!A1:I1', valueInputOption: 'RAW',
+      resource: { values: [MOVEMENT_HEADERS] },
+    });
+  } catch (e) {
+    // Tab already exists — make sure the header row is present.
+    try { await writeHeader(); } catch (_) { /* ignore */ }
+  }
+  movementsTabReady = true;
+}
+
+// POST /api/inventory/movement-log - Append a stock movement row
+router.post('/movement-log', checkServiceEnabled, async (req, res) => {
+  try {
+    const { itemId, itemName, sku, type, quantityChange, newQuantity, reason, performedBy } = req.body;
+    if (itemId === undefined || !type) {
+      return res.status(400).json({ success: false, error: 'itemId and type are required' });
+    }
+    const sheets = googleSheetsService.sheets;
+    const spreadsheetId = googleSheetsService.spreadsheetId;
+    if (!sheets || !spreadsheetId) {
+      return res.status(503).json({ success: false, error: 'Google Sheets not configured' });
+    }
+
+    await ensureMovementsTab();
+    const row = [
+      new Date().toISOString(),
+      itemId,
+      itemName || '',
+      sku || '',
+      type,
+      quantityChange !== undefined ? quantityChange : '',
+      newQuantity !== undefined ? newQuantity : '',
+      reason || '',
+      performedBy || '',
+    ];
+    await sheets.spreadsheets.values.append({
+      spreadsheetId, range: MOVEMENTS_RANGE, valueInputOption: 'RAW',
+      resource: { values: [row] },
+    });
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Error logging movement:', error);
+    res.status(500).json({ success: false, error: 'Failed to log movement: ' + error.message });
+  }
+});
+
+// GET /api/inventory/movement-log - Read stock movements (optional ?itemId=)
+router.get('/movement-log', checkServiceEnabled, async (req, res) => {
+  try {
+    const sheets = googleSheetsService.sheets;
+    const spreadsheetId = googleSheetsService.spreadsheetId;
+    if (!sheets || !spreadsheetId) {
+      return res.status(503).json({ success: false, error: 'Google Sheets not configured' });
+    }
+
+    await ensureMovementsTab();
+    const result = await sheets.spreadsheets.values.get({ spreadsheetId, range: MOVEMENTS_RANGE });
+    const rows = (result.data.values || []).slice(1).filter(r => r && r.length && r.some(c => c !== '' && c !== null));
+    const parsed = rows.map(r => ({
+      timestamp: r[0] || '',
+      itemId: r[1] !== undefined ? String(r[1]) : '',
+      itemName: r[2] || '',
+      sku: r[3] || '',
+      type: r[4] || '',
+      quantityChange: r[5] !== undefined && r[5] !== '' ? Number(r[5]) : '',
+      newQuantity: r[6] !== undefined && r[6] !== '' ? Number(r[6]) : '',
+      reason: r[7] || '',
+      performedBy: r[8] || '',
+    }));
+
+    const { itemId } = req.query;
+    const filtered = itemId ? parsed.filter(m => m.itemId === String(itemId)) : parsed;
+    res.status(200).json({ success: true, data: filtered.reverse() }); // newest first
+  } catch (error) {
+    console.error('Error reading movements:', error);
+    res.status(500).json({ success: false, error: 'Failed to read movements: ' + error.message });
+  }
+});
+
 module.exports = router;

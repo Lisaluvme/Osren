@@ -17,6 +17,18 @@ export interface InventoryItem {
   lowStockFlag?: number;
 }
 
+export interface StockMovementEntry {
+  timestamp: string;
+  itemId: string;
+  itemName?: string;
+  sku?: string;
+  type: string; // receive | issue | adjust | create | delete
+  quantityChange: number | string;
+  newQuantity: number | string;
+  reason?: string;
+  performedBy?: string;
+}
+
 class InventoryApiService {
   private async request(endpoint: string, options?: RequestInit): Promise<any> {
     const url = `${API_BASE_URL}${endpoint}`;
@@ -82,6 +94,19 @@ class InventoryApiService {
     return response.data;
   }
 
+  async logMovement(entry: Omit<StockMovementEntry, 'timestamp'>): Promise<void> {
+    await this.request('/inventory/movement-log', {
+      method: 'POST',
+      body: JSON.stringify(entry),
+    });
+  }
+
+  async getMovements(itemId?: string): Promise<StockMovementEntry[]> {
+    const query = itemId ? `?itemId=${encodeURIComponent(itemId)}` : '';
+    const response = await this.request(`/inventory/movement-log${query}`);
+    return response.data;
+  }
+
   isConnected(): boolean {
     // Service account is always connected
     return true;
@@ -90,4 +115,3 @@ class InventoryApiService {
 
 const inventoryApiService = new InventoryApiService();
 export default inventoryApiService;
-export type { InventoryItem };
