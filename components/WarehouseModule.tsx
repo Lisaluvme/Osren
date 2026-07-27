@@ -1,9 +1,18 @@
-import React, { useState, useMemo, useCallback } from 'react';
-import { InventoryItem } from '../types';
-import { AlertTriangle, Package, Upload, Download, Search, Filter, Plus, Minus, ShoppingCart, RefreshCw, Cloud, ExternalLink, X, Image as ImageIcon } from 'lucide-react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { InventoryItem, StockMovement, BatchInfo, SerialNumber } from '../types';
+import { AlertTriangle, Package, Upload, Download, Search, Filter, Plus, Minus, ShoppingCart, RefreshCw, Cloud, ExternalLink, X, Image as ImageIcon, History, Hash, Barcode, DollarSign, Settings, Bell, ChevronDown } from 'lucide-react';
 import { readExcel, writeExcel } from '../services/excelService';
 import inventoryApiService from '../services/api/inventoryApi';
 import ImageUpload from './ImageUpload';
+import GRNModal from './GRNModal';
+import StockHistoryModal from './StockHistoryModal';
+import BatchManagementModal from './BatchManagementModal';
+import SerialNumberModal from './SerialNumberModal';
+import InventoryValuationReport from './InventoryValuationReport';
+import ReorderLevelModal from './ReorderLevelModal';
+import LowStockAlertModal from './LowStockAlertModal';
+import InventorySummary from './InventorySummary';
+import ReorderRecommendationModal from './ReorderRecommendationModal';
 import { productApiService } from '../services/api/productApi';
 
 interface WarehouseModuleProps {
@@ -20,6 +29,19 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
   const [sortBy, setSortBy] = useState('name');
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [imageModalOpen, setImageModalOpen] = useState(false);
+  const [grnModalOpen, setGrnModalOpen] = useState(false);
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [selectedHistoryItem, setSelectedHistoryItem] = useState<InventoryItem | null>(null);
+  const [notification, setNotification] = useState({ show: false, message: '', type: 'success' as 'success' | 'error' });
+  const [batchModalOpen, setBatchModalOpen] = useState(false);
+  const [serialModalOpen, setSerialModalOpen] = useState(false);
+  const [valuationReportOpen, setValuationReportOpen] = useState(false);
+  const [reorderLevelModalOpen, setReorderLevelModalOpen] = useState(false);
+  const [lowStockAlertModalOpen, setLowStockAlertModalOpen] = useState(false);
+  const [reorderModalOpen, setReorderModalOpen] = useState(false);
+  const [advancedMenuOpen, setAdvancedMenuOpen] = useState(false);
+  const [summary, setSummary] = useState<any>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
 
   // Fetch inventory from Google Sheets (manual refresh only)
   const fetchInventoryFromSheets = useCallback(async () => {
@@ -51,6 +73,37 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
       }
     }
   };
+
+  // Fetch inventory summary statistics
+  const fetchInventorySummary = useCallback(async () => {
+    try {
+      setSummaryLoading(true);
+      const response = await fetch('http://localhost:5000/api/inventory/summary');
+      const result = await response.json();
+      if (result.success) {
+        setSummary(result.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch inventory summary:', error);
+    } finally {
+      setSummaryLoading(false);
+    }
+  }, []);
+
+  // Fetch summary on initial load and inventory changes
+  useEffect(() => {
+    fetchInventorySummary();
+  }, [fetchInventorySummary, inventory]);
+
+  // Handle summary card clicks
+  const handleLowStockClick = () => {
+    setFilterStatus('Low');
+  };
+
+  const handleOutOfStockClick = () => {
+    setFilterStatus('Critical');
+  };
+
 
   // Filtered and sorted inventory
   const filteredInventory = useMemo(() => {
@@ -198,6 +251,209 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
     }
   };
 
+  // GRN handling
+  const handleGRNSubmit = async (grnData: any) => {
+    try {
+      setSyncing(true);
+      setSyncStatus('syncing');
+
+      // Call backend API to create GRN and update inventory
+      const response = await fetch('http://localhost:5000/api/inventory/grn', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(grnData),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create GRN');
+      }
+
+      const result = await response.json();
+
+      // Refresh inventory to get updated data
+      await fetchInventoryFromSheets();
+
+      setSyncStatus('success');
+      setNotification({
+        show: true,
+        message: `GRN ${grnData.grnNumber} created successfully! Stock updated for ${grnData.itemName}.`,
+        type: 'success'
+      });
+
+      setTimeout(() => {
+        setNotification({ show: false, message: '', type: 'success' });
+        setSyncStatus('idle');
+        setSyncing(false);
+      }, 3000);
+    } catch (error) {
+      console.error('Failed to create GRN:', error);
+      setSyncStatus('error');
+      setNotification({
+        show: true,
+        message: 'Failed to create GRN. Please try again.',
+        type: 'error'
+      });
+
+      setTimeout(() => {
+        setNotification({ show: false, message: '', type: 'success' });
+        setSyncStatus('idle');
+        setSyncing(false);
+      }, 3000);
+    }
+  };
+
+  // Stock history handling
+  const fetchStockHistory = async (itemId: string): Promise<StockMovement[]> => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/inventory/stock-history/${itemId}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch stock history');
+      }
+      const result = await response.json();
+      return result.data || [];
+    } catch (error) {
+      console.error('Failed to fetch stock history:', error);
+      return [];
+    }
+  };
+
+  const openHistoryModal = (item: InventoryItem) => {
+    setSelectedHistoryItem(item);
+    setHistoryModalOpen(true);
+  };
+
+  const closeHistoryModal = () => {
+    setSelectedHistoryItem(null);
+    setHistoryModalOpen(false);
+  };
+
+
+
+
+
+
+
+
+
+  // Batch Management handling
+  const handleBatchSubmit = async (batchData: any) => {
+    try {
+      const response = await fetch('http://localhost:5000/api/inventory/batch', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(batchData),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create batch');
+      }
+
+      setNotification({
+        show: true,
+        message: `Batch ${batchData.batchNumber} created successfully!`,
+        type: 'success'
+      });
+
+      setTimeout(() => setNotification({ show: false, message: '', type: 'success' }), 3000);
+    } catch (error) {
+      console.error('Failed to create batch:', error);
+      setNotification({
+        show: true,
+        message: 'Failed to create batch',
+        type: 'error'
+      });
+    }
+  };
+
+  const fetchBatches = async (itemId: string): Promise<BatchInfo[]> => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/inventory/batches/${itemId}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch batches');
+      }
+      const result = await response.json();
+      return result.data || [];
+    } catch (error) {
+      console.error('Failed to fetch batches:', error);
+      return [];
+    }
+  };
+
+  // Serial Number handling
+  const handleSerialSubmit = async (serialData: any) => {
+    try {
+      const response = await fetch('http://localhost:5000/api/inventory/serial', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(serialData),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to add serial number');
+      }
+
+      setNotification({
+        show: true,
+        message: `Serial number ${serialData.serialNumber} added successfully!`,
+        type: 'success'
+      });
+
+      setTimeout(() => setNotification({ show: false, message: '', type: 'success' }), 3000);
+    } catch (error) {
+      console.error('Failed to add serial number:', error);
+      setNotification({
+        show: true,
+        message: 'Failed to add serial number',
+        type: 'error'
+      });
+    }
+  };
+
+  const fetchSerials = async (itemId: string): Promise<SerialNumber[]> => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/inventory/serials/${itemId}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch serial numbers');
+      }
+      const result = await response.json();
+      return result.data || [];
+    } catch (error) {
+      console.error('Failed to fetch serial numbers:', error);
+      return [];
+    }
+  };
+
+  // Reorder Level handling
+  const handleReorderLevelUpdate = async (itemId: string, reorderLevel: number, maxLevel: number) => {
+    try {
+      const response = await fetch('http://localhost:5000/api/inventory/reorder-level', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ itemId, reorderLevel, maxLevel }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update reorder level');
+      }
+
+      // Refresh inventory
+      await fetchInventoryFromSheets();
+
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to update reorder level:', error);
+      throw error;
+    }
+  };
+
   return (
     <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -223,6 +479,15 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
                         Sync failed
                     </div>
                 )}
+                {notification.show && (
+                    <div className={`flex items-center text-sm px-3 py-1 rounded-lg ${
+                        notification.type === 'success' ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-red-100 text-red-700 border border-red-300'
+                    }`}>
+                        {notification.message}
+                    </div>
+                )}
+
+                {/* Google Sheet Link */}
                 <a
                     href="https://docs.google.com/spreadsheets/d/1EzXFasyQxlhhDUCwTbhSc_Zxdm077xNNVvzznw0gwgk"
                     target="_blank"
@@ -233,6 +498,105 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
                     <ExternalLink className="w-4 h-4 mr-2" />
                     Google Sheet
                 </a>
+
+                {/* Primary Actions */}
+                <button
+                    onClick={() => setGrnModalOpen(true)}
+                    className="flex items-center px-3 py-2 text-sm font-medium text-green-600 bg-green-50 hover:bg-green-100 rounded-lg border border-green-300 transition-colors"
+                    title="Add Goods Received Note"
+                >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Receive Stock (GRN)
+                </button>
+
+
+
+                {/* Advanced Dropdown */}
+                <div className="relative">
+                    <button
+                        onClick={() => setAdvancedMenuOpen(!advancedMenuOpen)}
+                        className="flex items-center px-3 py-2 text-sm font-medium text-slate-600 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-300 transition-colors"
+                    >
+                        <Settings className="w-4 h-4 mr-2" />
+                        Advanced
+                        <ChevronDown className="w-4 h-4 ml-2" />
+                    </button>
+
+                    {advancedMenuOpen && (
+                        <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-slate-200 z-10">
+                            <div className="py-1">
+                                <button
+                                    onClick={() => {
+                                        setBatchModalOpen(true);
+                                        setAdvancedMenuOpen(false);
+                                    }}
+                                    className="flex items-center w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                                >
+                                    <Hash className="w-4 h-4 mr-2 text-teal-600" />
+                                    Batch Management
+                                </button>
+
+                                <button
+                                    onClick={() => {
+                                        setSerialModalOpen(true);
+                                        setAdvancedMenuOpen(false);
+                                    }}
+                                    className="flex items-center w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                                >
+                                    <Barcode className="w-4 h-4 mr-2 text-cyan-600" />
+                                    Serial Numbers
+                                </button>
+
+                                <button
+                                    onClick={() => {
+                                        setValuationReportOpen(true);
+                                        setAdvancedMenuOpen(false);
+                                    }}
+                                    className="flex items-center w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                                >
+                                    <DollarSign className="w-4 h-4 mr-2 text-green-600" />
+                                    Valuation Report
+                                </button>
+
+
+                                <button
+                                    onClick={() => {
+                                        setReorderLevelModalOpen(true);
+                                        setAdvancedMenuOpen(false);
+                                    }}
+                                    className="flex items-center w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                                >
+                                    <Settings className="w-4 h-4 mr-2 text-amber-600" />
+                                    Reorder Levels
+                                </button>
+
+                                <button
+                                    onClick={() => {
+                                        setReorderModalOpen(true);
+                                        setAdvancedMenuOpen(false);
+                                    }}
+                                    className="flex items-center w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                                >
+                                    <ShoppingCart className="w-4 h-4 mr-2 text-blue-600" />
+                                    Reorder Recommendations
+                                </button>
+
+                                <button
+                                    onClick={() => {
+                                        setLowStockAlertModalOpen(true);
+                                        setAdvancedMenuOpen(false);
+                                    }}
+                                    className="flex items-center w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                                >
+                                    <Bell className="w-4 h-4 mr-2 text-red-600" />
+                                    Low Stock Alerts ({inventory.filter(i => i.quantity <= i.minLevel).length})
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Refresh Button */}
                 <button
                     onClick={fetchInventoryFromSheets}
                     disabled={syncing}
@@ -244,6 +608,20 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
                 </button>
             </div>
         </div>
+
+        {/* Inventory Summary Dashboard */}
+        {summaryLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <span className="ml-3 text-slate-600">Loading inventory summary...</span>
+          </div>
+        ) : summary && (
+          <InventorySummary
+            summary={summary}
+            onLowStockClick={handleLowStockClick}
+            onOutOfStockClick={handleOutOfStockClick}
+          />
+        )}
 
         {/* Enhanced Inventory Management */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
@@ -349,16 +727,48 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                         {filteredInventory.map((item) => {
-                            const isLow = item.quantity <= item.minLevel;
-                            const isCritical = item.quantity <= item.minLevel * 0.2;
+                            // Enhanced stock status calculation
+                            const quantity = item.quantity || 0;
+                            const minLevel = item.minLevel || 10;
+
+                            let stockStatus: 'OUT_OF_STOCK' | 'CRITICAL' | 'LOW_STOCK' | 'HEALTHY' | 'OVERSTOCKED';
+                            let statusColor: string;
+                            let statusBgColor: string;
+                            let statusBorderColor: string;
+
+                            if (quantity === 0) {
+                                stockStatus = 'OUT_OF_STOCK';
+                                statusColor = 'text-red-700';
+                                statusBgColor = 'bg-red-50';
+                                statusBorderColor = 'border-red-200';
+                            } else if (quantity <= minLevel * 0.25) {
+                                stockStatus = 'CRITICAL';
+                                statusColor = 'text-red-700';
+                                statusBgColor = 'bg-red-50';
+                                statusBorderColor = 'border-red-200';
+                            } else if (quantity <= minLevel) {
+                                stockStatus = 'LOW_STOCK';
+                                statusColor = 'text-amber-700';
+                                statusBgColor = 'bg-amber-50';
+                                statusBorderColor = 'border-amber-200';
+                            } else {
+                                stockStatus = 'HEALTHY';
+                                statusColor = 'text-green-700';
+                                statusBgColor = 'bg-green-50';
+                                statusBorderColor = 'border-green-200';
+                            }
+
+                            const isOutOfStock = stockStatus === 'OUT_OF_STOCK';
+                            const isCriticalStock = stockStatus === 'CRITICAL';
+                            const isLowStock = stockStatus === 'LOW_STOCK';
 
                             return (
                                 <tr
                                     key={item.id}
                                     className={`transition-colors group ${
-                                        isCritical
+                                        isOutOfStock || isCriticalStock
                                             ? 'bg-red-50 hover:bg-red-100 border-l-4 border-l-red-500'
-                                            : isLow
+                                            : isLowStock
                                             ? 'bg-amber-50 hover:bg-amber-100 border-l-4 border-l-amber-500'
                                             : 'hover:bg-slate-50 border-l-4 border-l-transparent'
                                     }`}
@@ -389,7 +799,7 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <div className={`font-medium ${isCritical ? 'text-red-900' : 'text-slate-800'}`}>
+                                        <div className={`font-medium ${isCriticalStock || isOutOfStock ? 'text-red-900' : 'text-slate-800'}`}>
                                             {item.name}
                                         </div>
                                         <div className="text-xs text-slate-400">Last moved: {item.lastMovement}</div>
@@ -397,8 +807,8 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
                                     <td className="px-6 py-4 text-sm text-slate-500 font-mono">{item.sku}</td>
                                     <td className="px-6 py-4 text-center">
                                         <div className={`inline-flex items-center px-3 py-1 rounded-lg font-bold text-lg ${
-                                            isCritical ? 'bg-red-100 text-red-700' :
-                                            isLow ? 'bg-amber-100 text-amber-700' :
+                                            isOutOfStock || isCriticalStock ? 'bg-red-100 text-red-700' :
+                                            isLowStock ? 'bg-amber-100 text-amber-700' :
                                             'bg-green-100 text-green-700'
                                         }`}>
                                             {item.quantity}
@@ -408,11 +818,15 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
                                         {item.minLevel}
                                     </td>
                                     <td className="px-6 py-4 text-center">
-                                        {isCritical ? (
+                                        {isOutOfStock ? (
+                                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 border border-red-200">
+                                                <AlertTriangle className="w-3 h-3 mr-1" /> OUT OF STOCK
+                                            </span>
+                                        ) : isCriticalStock ? (
                                             <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 border border-red-200">
                                                 <AlertTriangle className="w-3 h-3 mr-1" /> CRITICAL
                                             </span>
-                                        ) : isLow ? (
+                                        ) : isLowStock ? (
                                             <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700 border border-amber-200">
                                                 Low Stock
                                             </span>
@@ -445,7 +859,15 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
                                             >
                                                 <Plus className="w-4 h-4" />
                                             </button>
-                                            {isLow && (
+                                            <div className="w-px h-4 bg-slate-300 mx-1" />
+                                            <button
+                                                onClick={() => openHistoryModal(item)}
+                                                className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                                title="View stock movement history"
+                                            >
+                                                <History className="w-4 h-4" />
+                                            </button>
+                                            {isLowStock && (
                                                 <button
                                                     onClick={() => adjustQuantity(item.id, item.minLevel - item.quantity)}
                                                     className="ml-3 px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition-colors"
@@ -573,6 +995,72 @@ const WarehouseModule: React.FC<WarehouseModuleProps> = ({inventory, onInventory
                 </div>
             </div>
         )}
+
+        {/* GRN Modal */}
+        <GRNModal
+            isOpen={grnModalOpen}
+            onClose={() => setGrnModalOpen(false)}
+            onSubmit={handleGRNSubmit}
+            inventory={inventory}
+        />
+
+        {/* Stock History Modal */}
+        {selectedHistoryItem && (
+            <StockHistoryModal
+                isOpen={historyModalOpen}
+                onClose={closeHistoryModal}
+                itemId={selectedHistoryItem.id}
+                itemName={selectedHistoryItem.name}
+                fetchHistory={fetchStockHistory}
+            />
+        )}
+
+        {/* Batch Management Modal */}
+        <BatchManagementModal
+            isOpen={batchModalOpen}
+            onClose={() => setBatchModalOpen(false)}
+            onSubmit={handleBatchSubmit}
+            inventory={inventory}
+            fetchBatches={fetchBatches}
+        />
+
+        {/* Serial Number Modal */}
+        <SerialNumberModal
+            isOpen={serialModalOpen}
+            onClose={() => setSerialModalOpen(false)}
+            onSubmit={handleSerialSubmit}
+            inventory={inventory}
+            fetchSerials={fetchSerials}
+        />
+
+        {/* Inventory Valuation Report */}
+        <InventoryValuationReport
+            isOpen={valuationReportOpen}
+            onClose={() => setValuationReportOpen(false)}
+            inventory={inventory}
+        />
+
+        {/* Reorder Level Management */}
+        <ReorderLevelModal
+            isOpen={reorderLevelModalOpen}
+            onClose={() => setReorderLevelModalOpen(false)}
+            onSubmit={handleReorderLevelUpdate}
+            inventory={inventory}
+        />
+
+        {/* Low Stock Alert System */}
+        <LowStockAlertModal
+            isOpen={lowStockAlertModalOpen}
+            onClose={() => setLowStockAlertModalOpen(false)}
+            inventory={inventory}
+        />
+
+        {/* Reorder Recommendation System */}
+        <ReorderRecommendationModal
+            isOpen={reorderModalOpen}
+            onClose={() => setReorderModalOpen(false)}
+            inventory={inventory}
+        />
     </div>
   );
 };

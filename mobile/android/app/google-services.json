@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "386064708059",
+    "project_id": "osren-becbb",
+    "storage_bucket": "osren-becbb.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:386064708059:android:711600792aaa9de2dbb7fe",
+        "android_client_info": {
+          "package_name": "com.company.osren"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "386064708059-u1fhkv6p4m622og0v8g93sg5ml3jql2e.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC-letMUlunZjUAcVYn_TVSqiO3M2Qi2eQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "386064708059-u1fhkv6p4m622og0v8g93sg5ml3jql2e.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

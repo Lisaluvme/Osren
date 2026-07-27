@@ -177,3 +177,153 @@ export interface AuditLog {
   ipAddress?: string;
   metadata?: any;
 }
+
+export interface GRN {
+  id: string;
+  grnNumber: string;
+  date: string;
+  supplier: string;
+  warehouse: string;
+  itemId: string;
+  itemName: string;
+  quantityReceived: number;
+  unitCost?: number;
+  totalCost?: number;
+  remarks?: string;
+  createdAt: string;
+  createdBy?: string;
+}
+
+export interface StockMovement {
+  id: string;
+  itemId: string;
+  itemName: string;
+  movementType: 'GRN' | 'ADJUSTMENT' | 'SALE' | 'TRANSFER' | 'RETURN' | 'OPENING_STOCK';
+  quantity: number;
+  referenceNumber?: string;
+  date: string;
+  performedBy?: string;
+  remarks?: string;
+  createdAt: string;
+}
+
+export interface StockTransfer {
+  id: string;
+  transferNumber: string;
+  date: string;
+  fromWarehouse: string;
+  toWarehouse: string;
+  itemId: string;
+  itemName: string;
+  quantity: number;
+  remarks?: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'COMPLETED' | 'CANCELLED';
+  requestedBy?: string;
+  approvedBy?: string;
+  approvedAt?: string;
+  completedAt?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface StockTake {
+  id: string;
+  stockTakeNumber: string;
+  date: string;
+  warehouse: string;
+  itemId: string;
+  itemName: string;
+  systemQuantity: number;
+  actualQuantity: number;
+  variance: number;
+  varianceReason?: string;
+  status: 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
+  performedBy?: string;
+  approvedBy?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface BatchInfo {
+  id: string;
+  itemId: string;
+  batchNumber: string;
+  expiryDate?: string;
+  quantity: number;
+  manufacturingDate?: string;
+  receivedDate: string;
+  cost?: number;
+  supplier?: string;
+  status: 'ACTIVE' | 'EXPIRED' | 'DEPLETED';
+  createdAt: string;
+}
+
+export interface SerialNumber {
+  id: string;
+  itemId: string;
+  serialNumber: string;
+  batchNumber?: string;
+  status: 'INSTOCK' | 'SOLD' | 'RESERVED' | 'RETURNED' | 'DEFECTIVE';
+  warehouse: string;
+  location?: string;
+  soldDate?: string;
+  customerId?: string;
+  remarks?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+// ERP Workflow Interfaces
+export interface SupplierInvoice {
+  id: string;
+  invoiceNumber: string;
+  grnId: string;
+  grnNumber: string;
+  supplier: string;
+  invoiceDate: string;
+  amount: number;
+  paymentStatus: 'PENDING' | 'PARTIAL' | 'PAID';
+  remarks?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface PaymentVoucher {
+  id: string;
+  voucherNumber: string;
+  date: string;
+  supplier: string;
+  supplierInvoiceId: string;
+  invoiceNumber: string;
+  invoiceAmount?: number;
+  outstandingAmount?: number;
+  amountPaid: number;
+  paymentMethod: 'BANK_TRANSFER' | 'CASH' | 'CHEQUE' | 'OTHER';
+  bankAccountId?: string;
+  referenceNo?: string;
+  remarks?: string;
+  status?: 'draft' | 'submitted' | 'approved' | 'paid';
+  attachments?: string[];
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface ReceiptCollection {
+  id: string;
+  receiptNumber: string;
+  date: string;
+  customer: string;
+  customerInvoiceId: string;
+  invoiceNumber: string;
+  invoiceAmount?: number;
+  outstandingAmount?: number;
+  amountReceived: number;
+  paymentMethod: 'BANK_TRANSFER' | 'CASH' | 'CHEQUE' | 'CARD' | 'OTHER';
+  bankAccountId?: string;
+  referenceNo?: string;
+  remarks?: string;
+  status?: 'draft' | 'submitted' | 'approved' | 'deposited';
+  attachments?: string[];
+  createdAt: string;
+  updatedAt?: string;
+}

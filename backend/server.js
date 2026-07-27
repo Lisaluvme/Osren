@@ -71,6 +71,14 @@ try {
   console.error('❌ Error loading payment routes:', error.message);
 }
 
+// Finance (Accounts AP/AR) — required by the mobile app's Accounts screen.
+try {
+  app.use('/api/finance', require('./routes/finance'));
+  console.log('✅ Finance routes loaded');
+} catch (error) {
+  console.error('❌ Error loading finance routes:', error.message);
+}
+
 try {
   app.use('/api/auth', require('./routes/authRoutes'));
   console.log('✅ Auth routes loaded');

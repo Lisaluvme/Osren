@@ -1,0 +1,43 @@
+# Render Blueprint for the OSREN backend (Node.js + Express).
+#
+# Deploy at https://render.com → New → Blueprint → connect this repo.
+# Render reads this file from the REPO ROOT; the service targets backend/ via rootDir.
+services:
+  - type: web
+    name: osren-backend
+    runtime: node                 # Node 20.x is read from backend/package.json "engines"
+    rootDir: backend              # ⚠️ must point at the backend, not the frontend
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start       # = node server.js
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+
+    envVars:
+      # --- Required for inventory to load ---
+      - key: USE_MOCK_DATA
+        value: "false"
+      - key: GOOGLE_SPREADSHEET_ID
+        value: "1EzXFasyQxlhhDUCwTbhSc_Zxdm077xNNVvzznw0gwgk"
+
+      # --- Secrets: Render prompts for these at Blueprint setup (sync: false) ---
+      - key: GOOGLE_CLIENT_EMAIL
+        sync: false
+      - key: GOOGLE_PRIVATE_KEY
+        sync: false
+
+      # --- Optional integrations (safe to leave blank if unused) ---
+      - key: GOOGLE_DRIVE_FOLDER_ID
+        value: "1WcpI9VKc9MZ3A-KFs5fgcj3ldYdSWhS3"
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: FIREBASE_PROJECT_ID
+        value: "osren-becbb"
+      - key: FIREBASE_CLIENT_EMAIL
+        sync: false
+      - key: FIREBASE_PRIVATE_KEY
+        sync: false

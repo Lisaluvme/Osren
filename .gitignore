@@ -36,3 +36,11 @@ osren-app-*.json
 
 # Local Netlify folder
 .netlify
+
+# Claude Code session artifacts
+.claude/
+
+# Backend runtime/junk (local state, not source)
+backend/backend/
+backend/data/
+backend/uploads/
