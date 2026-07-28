@@ -74,4 +74,23 @@ class OrdersProvider extends ChangeNotifier {
       return false;
     }
   }
+
+  /// Capture proof-of-delivery: stores the receiver's [signatureDataUrl] (a
+  /// `data:image/png;base64,...` string) and moves the order to `invoiced` so
+  /// it surfaces in the Accounts (AP/AR) receivables list.
+  Future<bool> signAndComplete(String id, String signatureDataUrl) async {
+    try {
+      await _services.orders.patch(
+        id: id,
+        status: 'invoiced',
+        signature: signatureDataUrl,
+      );
+      await load();
+      return true;
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
 }

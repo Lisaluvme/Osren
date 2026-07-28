@@ -7,6 +7,7 @@ import '../providers/notification_provider.dart';
 import '../theme/app_theme.dart';
 import 'accounts_screen.dart';
 import 'dashboard_screen.dart';
+import 'delivery_screen.dart';
 import 'inventory_screen.dart';
 import 'notifications_screen.dart';
 import 'sales_screen.dart';
@@ -56,6 +57,13 @@ const allModules = <ModuleDef>[
     icon: Icons.point_of_sale_outlined,
     roles: {UserRole.admin, UserRole.sales, UserRole.driver},
     builder: SalesScreen.new,
+  ),
+  ModuleDef(
+    id: 'delivery',
+    label: 'Delivery',
+    icon: Icons.local_shipping_outlined,
+    roles: {UserRole.driver, UserRole.admin},
+    builder: DeliveryScreen.new,
   ),
   ModuleDef(
     id: 'warehouse',

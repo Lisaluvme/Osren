@@ -950,7 +950,7 @@ router.get('/dashboard-summary', async (req, res) => {
     const ordersResult = await ordersResponse.json();
     const orders = ordersResult.success ? ordersResult.data : [];
     const customerOutstandingAmount = orders
-      .filter(order => ['pending', 'processing'].includes(order.status.toLowerCase()))
+      .filter(order => ['pending', 'processing', 'invoiced'].includes(order.status.toLowerCase()))
       .reduce((sum, order) => sum + (order.totalAmount || 0), 0);
 
     // Calculate total received payments

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:pdf/pdf.dart';
@@ -75,6 +76,10 @@ Future<Uint8List> generateDeliveryOrderPdf(
         _itemsTable(order),
         pw.SizedBox(height: 18),
         _notesBox(order),
+        if (_hasSignature(order)) ...[
+          pw.SizedBox(height: 16),
+          _signatureBlock(order),
+        ],
         pw.SizedBox(height: 28),
         _footer(ci),
       ],
@@ -194,7 +199,10 @@ pw.Widget _deliveryInfo(SalesOrder order) {
     width: double.infinity,
     padding: const pw.EdgeInsets.all(10),
     decoration: pw.BoxDecoration(
-      border: pw.BoxBorder(top: true, bottom: true, color: _line, width: 0.8),
+      border: pw.Border(
+        top: pw.BorderSide(color: _line, width: 0.8),
+        bottom: pw.BorderSide(color: _line, width: 0.8),
+      ),
     ),
     child: pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -244,7 +252,7 @@ pw.Widget _itemsTable(SalesOrder order) {
           color: total
               ? _success
               : (header ? _primaryLight : null),
-          border: pw.BoxBorder(bottom: true, color: _line, width: 0.5),
+          border: pw.Border(bottom: pw.BorderSide(color: _line, width: 0.5)),
         ),
         child: pw.Row(
           children: [
@@ -289,7 +297,7 @@ pw.Widget _notesBox(SalesOrder order) {
       decoration: pw.BoxDecoration(
         color: _warningBg,
         borderRadius: pw.BorderRadius.circular(6),
-        border: pw.BoxBorder.all(color: PdfColor.fromInt(0xFFFFC107), width: 0.6),
+        border: pw.Border.all(color: PdfColor.fromInt(0xFFFFC107), width: 0.6),
       ),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -318,11 +326,53 @@ pw.Widget _notesBox(SalesOrder order) {
   );
 }
 
+bool _hasSignature(SalesOrder order) {
+  final sig = order.signature;
+  return sig != null && sig.isNotEmpty && sig.contains(',');
+}
+
+/// Proof-of-delivery block: renders the captured customer signature (a
+/// `data:image/png;base64,...` URL stored on the order) beside the receiver.
+pw.Widget _signatureBlock(SalesOrder order) {
+  final b64 = order.signature!.substring(order.signature!.indexOf(',') + 1);
+  return pw.Column(
+    crossAxisAlignment: pw.CrossAxisAlignment.start,
+    children: [
+      _sectionLabel('Proof of Delivery'),
+      pw.SizedBox(height: 6),
+      pw.Container(
+        padding: const pw.EdgeInsets.all(10),
+        decoration: pw.BoxDecoration(
+          color: PdfColor.fromInt(0xFFE8F5E9),
+          borderRadius: pw.BorderRadius.circular(6),
+        ),
+        child: pw.Row(
+          crossAxisAlignment: pw.CrossAxisAlignment.center,
+          children: [
+            pw.Image(pw.MemoryImage(base64Decode(b64)),
+                height: 56, width: 150, fit: pw.BoxFit.contain),
+            pw.SizedBox(width: 12),
+            pw.Expanded(
+              child: pw.Text('Received by: ${order.clientName}',
+                  style: pw.TextStyle(
+                      color: _ink,
+                      fontSize: 10,
+                      fontWeight: pw.FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    ],
+  );
+}
+
 pw.Widget _footer(CompanyInfo ci) {
   return pw.Container(
     width: double.infinity,
     padding: const pw.EdgeInsets.only(top: 8),
-    decoration: pw.BoxBorder(top: true, color: _line, width: 0.8),
+    decoration: pw.BoxDecoration(
+      border: pw.Border(top: pw.BorderSide(color: _line, width: 0.8)),
+    ),
     child: pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
