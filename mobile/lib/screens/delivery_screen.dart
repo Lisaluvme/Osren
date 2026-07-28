@@ -21,8 +21,8 @@ class DeliveryScreen extends StatefulWidget {
 }
 
 class _DeliveryScreenState extends State<DeliveryScreen> {
-  /// 'processing' = To Deliver (default), 'invoiced' = Completed.
-  String _filter = 'processing';
+  /// false = To Deliver (pending + processing), true = Completed (invoiced).
+  bool _showCompleted = false;
 
   @override
   void initState() {
@@ -35,8 +35,15 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
   @override
   Widget build(BuildContext context) {
     final orders = context.watch<OrdersProvider>();
-    final filtered =
-        orders.orders.where((o) => o.status.name == _filter).toList();
+    final filtered = _showCompleted
+        ? orders.orders
+            .where((o) => o.status == OrderStatus.invoiced)
+            .toList()
+        : orders.orders
+            .where((o) =>
+                o.status == OrderStatus.pending ||
+                o.status == OrderStatus.processing)
+            .toList();
 
     return Scaffold(
       body: Column(
@@ -49,13 +56,13 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
               children: [
                 _FilterChip(
                   label: 'To Deliver',
-                  selected: _filter == 'processing',
-                  onSelected: () => setState(() => _filter = 'processing'),
+                  selected: !_showCompleted,
+                  onSelected: () => setState(() => _showCompleted = false),
                 ),
                 _FilterChip(
                   label: 'Completed',
-                  selected: _filter == 'invoiced',
-                  onSelected: () => setState(() => _filter = 'invoiced'),
+                  selected: _showCompleted,
+                  onSelected: () => setState(() => _showCompleted = true),
                 ),
               ],
             ),
@@ -76,8 +83,8 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                           children: [
                             const SizedBox(height: 80),
                             EmptyState(
-                              message: _filter == 'processing'
-                                  ? 'No deliveries queued. Orders marked "DO Created" will appear here.'
+                              message: !_showCompleted
+                                  ? 'No deliveries queued. New sales orders appear here automatically.'
                                   : 'Nothing signed off yet.',
                               icon: Icons.local_shipping_outlined,
                             ),
@@ -211,19 +218,19 @@ class _DeliveryTile extends StatelessWidget {
                   onPressed: () => _viewReport(context),
                 ),
                 const SizedBox(width: 8),
-                if (order.status == OrderStatus.processing)
-                  _ActionButton(
-                    label: 'Sign',
-                    icon: Icons.draw_outlined,
-                    color: AppTheme.success,
-                    onPressed: () => _captureSignature(context),
-                  )
-                else
+                if (order.status == OrderStatus.invoiced)
                   _ActionButton(
                     label: 'Reopen',
                     icon: Icons.undo,
                     color: AppTheme.slate,
                     onPressed: () => _setStatus(context, 'processing'),
+                  )
+                else
+                  _ActionButton(
+                    label: 'Sign',
+                    icon: Icons.draw_outlined,
+                    color: AppTheme.success,
+                    onPressed: () => _captureSignature(context),
                   ),
               ],
             ),
