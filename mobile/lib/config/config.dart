@@ -12,9 +12,10 @@ class AppConfig {
 
   /// Base URL of the backend REST API (no trailing slash).
   ///
-  /// Default targets the Android emulator's host alias. Override at runtime
-  /// from the Settings screen (persisted to SharedPreferences).
-  static const String defaultApiBaseUrl = 'http://10.0.2.2:5000/api';
+  /// Default targets the production backend deployed on Render. Override at
+  /// runtime from the Settings screen (persisted to SharedPreferences) — e.g.
+  /// http://10.0.2.2:5000/api for the emulator, or your LAN IP for a device.
+  static const String defaultApiBaseUrl = 'https://osren.onrender.com/api';
 
   /// Key under which the runtime API base URL is persisted.
   static const String baseUrlPrefKey = 'api_base_url';
