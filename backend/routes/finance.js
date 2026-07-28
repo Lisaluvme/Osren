@@ -252,21 +252,19 @@ router.post('/payment-voucher', async (req, res) => {
       createdAt: new Date().toISOString()
     };
 
-    // Store payment voucher
+    // Store payment voucher (existingVouchers was already read above for the
+    // outstanding-amount calculation — reuse it instead of re-reading).
     const voucherFilePath = '../data/payment-vouchers.json';
-    const existingVouchers = await readFromFile(voucherFilePath);
     existingVouchers.push(paymentVoucher);
     await writeToFile(path.join(__dirname, voucherFilePath), existingVouchers);
 
-    // Update supplier invoice status based on payment completion
-    const invoiceFilePath = '../data/supplier-invoices.json';
-    const invoices = await readFromFile(invoiceFilePath);
+    // Update supplier invoice status based on payment completion (invoices was
+    // already read above — reuse it instead of re-reading).
     const invoiceIndex = invoices.findIndex(inv => inv.id === supplierInvoiceId);
 
     if (invoiceIndex !== -1) {
-      // Calculate total payments including this one
-      const allVouchers = [...existingVouchers, paymentVoucher];
-      const finalPayments = allVouchers.filter(v =>
+      // existingVouchers now contains paymentVoucher, so no need to append it again.
+      const finalPayments = existingVouchers.filter(v =>
         v.supplierInvoiceId === supplierInvoiceId && v.status !== 'draft'
       );
       const totalPaid = finalPayments.reduce((sum, v) => sum + v.amountPaid, 0);
@@ -519,7 +517,7 @@ router.post('/receipt-collection', async (req, res) => {
     let invoiceAmount = 0;
 
     try {
-      const ordersResponse = await fetch(`http://localhost:5000/api/orders/${customerInvoiceId}`);
+      const ordersResponse = await fetch(`http://localhost:${process.env.PORT || 5000}/api/orders/${customerInvoiceId}`);
       const ordersResult = await ordersResponse.json();
 
       if (ordersResult.success) {
@@ -573,9 +571,9 @@ router.post('/receipt-collection', async (req, res) => {
       createdAt: new Date().toISOString()
     };
 
-    // Store receipt collection
+    // Store receipt collection (existingReceipts was already read above for
+    // the outstanding-amount calculation — reuse it instead of re-reading).
     const receiptFilePath = '../data/receipt-collections.json';
-    const existingReceipts = await readFromFile(receiptFilePath);
     existingReceipts.push(receiptCollection);
     await writeToFile(path.join(__dirname, receiptFilePath), existingReceipts);
 
@@ -697,7 +695,7 @@ router.put('/receipt-collections/:id', async (req, res) => {
     if (updatedReceipt.status === 'deposited' || updatedReceipt.status === 'approved') {
       try {
         // Update the order status to 'paid'
-        const ordersResponse = await fetch(`http://localhost:5000/api/orders/${customerInvoiceId}`);
+        const ordersResponse = await fetch(`http://localhost:${process.env.PORT || 5000}/api/orders/${customerInvoiceId}`);
         const ordersResult = await ordersResponse.json();
 
         if (ordersResult.success) {
@@ -710,7 +708,7 @@ router.put('/receipt-collections/:id', async (req, res) => {
 
           if (totalReceived >= ordersResult.data.totalAmount) {
             // Update order status to paid
-            await fetch(`http://localhost:5000/api/orders/${customerInvoiceId}`, {
+            await fetch(`http://localhost:${process.env.PORT || 5000}/api/orders/${customerInvoiceId}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ status: 'paid' })
@@ -841,7 +839,7 @@ router.get('/supplier-invoices/outstanding', async (req, res) => {
 router.get('/customer-invoices/outstanding', async (req, res) => {
   try {
     // Fetch customer orders
-    const ordersResponse = await fetch('http://localhost:5000/api/orders');
+    const ordersResponse = await fetch(`http://localhost:${process.env.PORT || 5000}/api/orders`);
     const ordersResult = await ordersResponse.json();
     const orders = ordersResult.success ? ordersResult.data : [];
 
@@ -931,7 +929,8 @@ router.get('/payment-history/:entityId/:entityType', async (req, res) => {
 router.get('/dashboard-summary', async (req, res) => {
   try {
     // Fetch inventory data
-    const inventoryResponse = await fetch('http://localhost:5000/api/inventory/list');
+    const base = `http://localhost:${process.env.PORT || 5000}`;
+    const inventoryResponse = await fetch(`${base}/api/inventory/list`);
     const inventoryResult = await inventoryResponse.json();
     const inventory = inventoryResult.success ? inventoryResult.data : [];
 
@@ -947,7 +946,7 @@ router.get('/dashboard-summary', async (req, res) => {
       .reduce((sum, inv) => sum + inv.amount, 0);
 
     // For customer outstanding, we'll use orders data (simplified)
-    const ordersResponse = await fetch('http://localhost:5000/api/orders');
+    const ordersResponse = await fetch(`${base}/api/orders`);
     const ordersResult = await ordersResponse.json();
     const orders = ordersResult.success ? ordersResult.data : [];
     const customerOutstandingAmount = orders
