@@ -10,9 +10,10 @@ import CustomerReceiptForm from './accounts/CustomerReceiptForm';
 
 interface AccountsModuleProps {
   newOrder?: SalesOrder | null;
+  signedOrder?: SalesOrder | null;
 }
 
-const AccountsModule: React.FC<AccountsModuleProps> = ({ newOrder }: AccountsModuleProps) => {
+const AccountsModule: React.FC<AccountsModuleProps> = ({ newOrder, signedOrder }: AccountsModuleProps) => {
   // Tab management
   const [activeTab, setActiveTab] = useState<'invoices' | 'payment-vouchers' | 'customer-receipts'>('invoices');
 
@@ -48,7 +49,7 @@ const AccountsModule: React.FC<AccountsModuleProps> = ({ newOrder }: AccountsMod
     fetchOrders();
     fetchPaymentVouchers();
     fetchCustomerReceipts();
-  }, [newOrder]); // Re-fetch when newOrder changes
+  }, [newOrder, signedOrder]); // Re-fetch when newOrder or signedOrder changes
 
   // Fetch payment vouchers
   const fetchPaymentVouchers = async () => {
@@ -78,6 +79,23 @@ const AccountsModule: React.FC<AccountsModuleProps> = ({ newOrder }: AccountsMod
     }
   };
 
+  // Build an invoice view-model from a just-signed delivery order so it can be
+  // shown in the Accounts list immediately (optimistic), even before/without a
+  // successful backend fetch.
+  const signedOrderToInvoice = (o: SalesOrder): any => ({
+    id: o.id,
+    clientName: o.clientName,
+    amount: o.total || 0,
+    dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from now
+    status: 'Approved', // Signed delivery => invoiced/approved
+    items: (o.items || []).map(it => ({ name: it.name, quantity: it.qty, unitPrice: it.price })),
+    createdAt: o.date || '',
+    deliveryAddress: '',
+    contactNumber: '',
+    notes: '',
+    signature: null
+  });
+
   const fetchOrders = async () => {
     try {
       setLoading(true);
@@ -89,9 +107,10 @@ const AccountsModule: React.FC<AccountsModuleProps> = ({ newOrder }: AccountsMod
 
       console.log('Accounts: Orders response:', data);
 
+      let transformedInvoices: any[] = [];
       if (data.success) {
         // Transform orders to Invoice format with full order data
-        const transformedInvoices: any[] = data.data.map((order: any) => ({
+        transformedInvoices = data.data.map((order: any) => ({
           id: order.id,
           clientName: order.clientName,
           amount: order.totalAmount || 0,
@@ -104,17 +123,23 @@ const AccountsModule: React.FC<AccountsModuleProps> = ({ newOrder }: AccountsMod
           notes: order.notes || '',
           signature: order.signature || null
         }));
-
-        console.log('Accounts: Transformed invoices:', transformedInvoices);
-        setInvoices(transformedInvoices);
       } else {
         console.error('Accounts: Failed to fetch orders:', data.error);
-        setInvoices([]);
       }
+
+      // Optimistically surface the just-signed delivery order so it ALWAYS
+      // appears in the Accounts list, even if the backend hasn't persisted /
+      // returned it yet (e.g. in-memory store reset or transient fetch error).
+      if (signedOrder && !transformedInvoices.some(inv => inv.id === signedOrder.id)) {
+        transformedInvoices = [signedOrderToInvoice(signedOrder), ...transformedInvoices];
+      }
+
+      console.log('Accounts: Transformed invoices:', transformedInvoices);
+      setInvoices(transformedInvoices);
     } catch (error) {
       console.error('Accounts: Error fetching orders:', error);
-      // Show empty state instead of mock data
-      setInvoices([]);
+      // Even on fetch failure, show the just-signed order so the user sees it.
+      setInvoices(signedOrder ? [signedOrderToInvoice(signedOrder)] : []);
     } finally {
       setLoading(false);
     }
@@ -507,6 +532,15 @@ const AccountsModule: React.FC<AccountsModuleProps> = ({ newOrder }: AccountsMod
                               className="px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition-colors"
                             >
                               Approve
+                            </button>
+                          )}
+                          {inv.status === 'Approved' && (
+                            <button
+                              onClick={() => handleOpenPaymentDialog(inv)}
+                              className="px-2 py-1 text-xs font-medium text-purple-600 bg-purple-50 hover:bg-purple-100 rounded border border-purple-200 transition-colors flex items-center gap-1"
+                            >
+                              <Receipt className="w-3 h-3" />
+                              Print Receipt
                             </button>
                           )}
                           <button

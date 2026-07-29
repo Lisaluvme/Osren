@@ -22,7 +22,13 @@ interface DeliveryStop extends DeliveryRoute {
   hasCoordinates: boolean;
 }
 
-const DeliveryModule: React.FC = () => {
+interface DeliveryModuleProps {
+  // Fired after a delivery is signed + invoiced, so the app can route the
+  // order to the Accounts tab for invoicing/receipt.
+  onSigned?: (order: Order) => void;
+}
+
+const DeliveryModule: React.FC<DeliveryModuleProps> = ({ onSigned }) => {
   const [deliveries, setDeliveries] = useState<DeliveryStop[]>([]);
   const [loading, setLoading] = useState(true);
   const [optimizing, setOptimizing] = useState(false);
@@ -171,6 +177,9 @@ const DeliveryModule: React.FC = () => {
            console.log('✅ Signature saved response:', data);
 
            if (data.success) {
+             // Notify parent so the order is sent to the Accounts tab
+             // (for invoicing / receipt) immediately after sign-off.
+             onSigned?.(stop.originalOrder);
              // Remove from local deliveries since it's now invoiced
              setDeliveries(prev => prev.filter(d => d.id !== signingOrder));
              setSigningOrder(null);

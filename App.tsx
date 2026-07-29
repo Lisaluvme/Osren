@@ -27,6 +27,8 @@ const App: React.FC = () => {
   const [inventoryError, setInventoryError] = useState('');
   // State for new order to pass to Distribution module
   const [newOrder, setNewOrder] = useState<SalesOrder | null>(null);
+  // State for a just-signed delivery order to pass to the Accounts module
+  const [signedOrder, setSignedOrder] = useState<SalesOrder | null>(null);
 
   // Load real inventory data on mount
   useEffect(() => {
@@ -119,6 +121,27 @@ const App: React.FC = () => {
     setActiveModule('distribution');
   };
 
+  // Handle delivery sign-off - send the signed order to the Accounts tab
+  // for invoicing/receipt. Reuses newOrder as the Accounts refetch trigger
+  // (AccountsModule refetches whenever newOrder changes).
+  const handleDeliverySigned = (order: any) => {
+    const transformedOrder: SalesOrder = {
+      id: order.id,
+      clientName: order.clientName,
+      items: (order.items || []).map((item: any) => ({
+        name: item.name,
+        qty: item.quantity,
+        price: 0
+      })),
+      total: order.totalAmount || 0,
+      status: 'Invoiced', // Signed delivery => invoiced, ready for Accounts
+      date: order.createdAt || new Date().toISOString()
+    };
+
+    setSignedOrder(transformedOrder);
+    setActiveModule('accounts');
+  };
+
   // Route renderer
   const renderModule = () => {
     if (inventoryLoading) {
@@ -152,7 +175,7 @@ const App: React.FC = () => {
       case 'finance':
         return <FinanceModule currentRole={currentUserRole} />;
       case 'accounts':
-        return <AccountsModule newOrder={newOrder} />;
+        return <AccountsModule newOrder={newOrder} signedOrder={signedOrder} />;
       case 'distribution':
         return <DistributionModule newOrder={newOrder} />;
       case 'warehouse':
@@ -160,7 +183,7 @@ const App: React.FC = () => {
       case 'sales':
         return <SalesModule inventory={inventory} onOrderPlaced={handleOrderPlaced} onInventoryRefresh={loadInventory} />;
       case 'delivery':
-        return <DeliveryModule />;
+        return <DeliveryModule onSigned={handleDeliverySigned} />;
       case 'chatbot':
         return <ChatbotModule />;
       case 'settings':
