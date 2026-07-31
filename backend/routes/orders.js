@@ -93,10 +93,10 @@ const loadOrdersFromSheets = async () => {
     return orders;
   }
 
-  try {
-    const sheets = googleSheetsService.sheets;
-    const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;
+  const sheets = googleSheetsService.sheets;
+  const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;
 
+  try {
     console.log('🔍 Attempting to load orders from Google Sheets...');
     console.log('📝 Spreadsheet ID:', spreadsheetId);
 
@@ -160,7 +160,7 @@ const loadOrdersFromSheets = async () => {
                   title: 'Orders',
                   gridProperties: {
                     rowCount: 1000,
-                    columnCount: 10
+                    columnCount: 11
                   }
                 }
               }
@@ -168,13 +168,13 @@ const loadOrdersFromSheets = async () => {
           }
         });
 
-        // Add header row
+        // Add header row (11 columns A-K, incl. Signature)
         await sheets.spreadsheets.values.update({
           spreadsheetId,
-          range: 'Orders!A1:J1',
+          range: 'Orders!A1:K1',
           valueInputOption: 'RAW',
           resource: {
-            values: [['Order ID', 'Client Name', 'Items', 'Total Items', 'Total Amount', 'Status', 'Created At', 'Delivery Address', 'Contact Number', 'Notes']]
+            values: [['Order ID', 'Client Name', 'Items', 'Total Items', 'Total Amount', 'Status', 'Created At', 'Delivery Address', 'Contact Number', 'Notes', 'Signature']]
           }
         });
 
