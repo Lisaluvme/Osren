@@ -43,9 +43,9 @@ class OrdersService {
     final data = await _api.post('/orders', body: {
       'clientName': clientName,
       'items': items.map((e) => e.toJson()).toList(),
-      if (deliveryAddress != null) 'deliveryAddress': deliveryAddress,
-      if (contactNumber != null) 'contactNumber': contactNumber,
-      if (notes != null) 'notes': notes,
+      'deliveryAddress': ?deliveryAddress,
+      'contactNumber': ?contactNumber,
+      'notes': ?notes,
     }) as Map<String, dynamic>;
     return SalesOrder.fromJson(data);
   }
@@ -57,8 +57,8 @@ class OrdersService {
     String? signature,
   }) async {
     await _api.patch('/orders/$id', body: {
-      if (status != null) 'status': status,
-      if (signature != null) 'signature': signature,
+      'status': ?status,
+      'signature': ?signature,
     });
   }
 

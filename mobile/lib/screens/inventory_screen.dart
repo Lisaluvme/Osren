@@ -94,7 +94,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 8),
                         itemCount: items.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        separatorBuilder: (_, _) => const SizedBox(height: 8),
                         itemBuilder: (context, i) {
                           final item = items[i];
                           return _InventoryTile(item: item);

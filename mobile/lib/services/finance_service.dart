@@ -31,6 +31,51 @@ class FinanceService {
     return _asList(data).map(ReceiptCollection.fromJson).toList();
   }
 
+  /// `GET /api/finance/customer-invoices/outstanding` — delivered (signed)
+  /// orders awaiting payment. Drives the Accounts "Receivable" tab.
+  Future<List<CustomerInvoice>> customerInvoicesOutstanding() async {
+    final data = await _api.get('/finance/customer-invoices/outstanding');
+    return _asList(data).map(CustomerInvoice.fromJson).toList();
+  }
+
+  /// `POST /api/finance/customer-invoice` — create a customer invoice from a
+  /// delivered order. Moves the receivable from "Pending Invoice" to "Unpaid".
+  /// The order is NOT marked paid here.
+  Future<CustomerInvoice> createCustomerInvoice({
+    required String orderId,
+  }) async {
+    final data = await _api.post('/finance/customer-invoice', body: {
+      'orderId': orderId,
+    });
+    return CustomerInvoice.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// `POST /api/finance/customer-invoices/:id/payments` — record a payment
+  /// against a customer invoice. Auto-generates a receipt, updates the
+  /// invoice balance/status, and marks the order `paid` once settled.
+  /// Returns the updated invoice.
+  Future<CustomerInvoice> recordInvoicePayment({
+    required String invoiceId,
+    required num amountReceived,
+    required String paymentMethod,
+    String? referenceNo,
+    String? remarks,
+  }) async {
+    final data = await _api.post(
+      '/finance/customer-invoices/$invoiceId/payments',
+      body: {
+        'amountReceived': amountReceived,
+        'paymentMethod': paymentMethod,
+        'referenceNo': ?referenceNo,
+        'remarks': ?remarks,
+      },
+    );
+    final map = data is Map<String, dynamic> ? data : <String, dynamic>{};
+    // Endpoint returns { invoice, receipt }; fall back to the payload itself.
+    final invoice = map['invoice'] ?? map;
+    return CustomerInvoice.fromJson(invoice as Map<String, dynamic>);
+  }
+
   /// `POST /api/finance/payment-voucher`.
   Future<void> createPaymentVoucher({
     required String date,
@@ -49,8 +94,8 @@ class FinanceService {
       'invoiceNumber': invoiceNumber,
       'amountPaid': amountPaid,
       'paymentMethod': paymentMethod,
-      if (referenceNo != null) 'referenceNo': referenceNo,
-      if (remarks != null) 'remarks': remarks,
+      'referenceNo': ?referenceNo,
+      'remarks': ?remarks,
     });
   }
 
@@ -72,8 +117,8 @@ class FinanceService {
       'invoiceNumber': invoiceNumber,
       'amountReceived': amountReceived,
       'paymentMethod': paymentMethod,
-      if (referenceNo != null) 'referenceNo': referenceNo,
-      if (remarks != null) 'remarks': remarks,
+      'referenceNo': ?referenceNo,
+      'remarks': ?remarks,
     });
   }
 

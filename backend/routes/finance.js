@@ -1,4 +1,5 @@
 const express = require('express');
+const path = require('path');
 const router = express.Router();
 
 console.log('🔧 Finance routes initialized');
@@ -795,6 +796,244 @@ router.get('/receipt-collections/draft', async (req, res) => {
   }
 });
 
+// ==================== CUSTOMER (SALES) INVOICE ENDPOINTS ====================
+//
+// Lifecycle: a signed delivery (order status `invoiced`) shows in Accounts as
+// "Pending Invoice". Accounts creates a customer invoice from it (status
+// `Unpaid`), then records payments. Each payment auto-generates a receipt
+// collection and updates the invoice balance. When fully paid the invoice
+// becomes `Paid` and only then is the underlying order marked `paid`.
+//   Order(delivered) -> Invoice(Unpaid) -> Partial Paid -> Paid
+
+// POST /api/finance/customer-invoice - Create a customer invoice from a delivered order
+router.post('/customer-invoice', async (req, res) => {
+  try {
+    const { orderId } = req.body;
+
+    if (!orderId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required field: orderId'
+      });
+    }
+
+    // Load the source order to confirm it has been delivered/signed.
+    let order = null;
+    try {
+      const orderRes = await fetch(`http://localhost:${process.env.PORT || 5000}/api/orders/${orderId}`);
+      const orderJson = await orderRes.json();
+      if (orderJson.success) order = orderJson.data;
+    } catch (e) {
+      console.error('Could not fetch order for invoice:', e.message);
+    }
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        error: 'Order not found'
+      });
+    }
+
+    if ((order.status || '').toLowerCase() !== 'invoiced') {
+      return res.status(400).json({
+        success: false,
+        error: `Order must be delivered (status 'invoiced') before invoicing. Current status: '${order.status}'`
+      });
+    }
+
+    // Block duplicate invoices for the same order.
+    const invoiceFilePath = '../data/customer-invoices.json';
+    const existingInvoices = await readFromFile(invoiceFilePath);
+    if (existingInvoices.some(inv => inv.orderId === orderId)) {
+      return res.status(409).json({
+        success: false,
+        error: 'An invoice already exists for this order'
+      });
+    }
+
+    // Generate invoice number INV-yyyymmdd-nnn
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const seq = String(existingInvoices.length + 1).padStart(3, '0');
+    const invoiceNumber = `INV-${year}${month}${day}-${seq}`;
+
+    const invoiceAmount = parseFloat(order.totalAmount) || 0;
+
+    const customerInvoice = {
+      id: generateId('cinv'),
+      invoiceNumber,
+      orderId,
+      customer: (order.clientName || '').trim(),
+      invoiceAmount,
+      receivedAmount: 0,
+      outstandingAmount: invoiceAmount,
+      status: 'Unpaid', // Pending Invoice -> Unpaid -> Partial Paid -> Paid
+      createdAt: new Date().toISOString()
+    };
+
+    existingInvoices.push(customerInvoice);
+    await writeToFile(path.join(__dirname, invoiceFilePath), existingInvoices);
+
+    // NOTE: the order is deliberately NOT marked paid here. It becomes `paid`
+    // only after this invoice is fully settled (see /payments below).
+
+    res.status(201).json({
+      success: true,
+      data: customerInvoice,
+      message: `Invoice ${invoiceNumber} created for ${order.clientName}`
+    });
+  } catch (error) {
+    console.error('Error creating customer invoice:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create customer invoice: ' + error.message
+    });
+  }
+});
+
+// GET /api/finance/customer-invoices - Get all customer invoices
+router.get('/customer-invoices', async (req, res) => {
+  try {
+    const invoices = await readFromFile('../data/customer-invoices.json');
+    invoices.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    res.status(200).json({
+      success: true,
+      data: invoices
+    });
+  } catch (error) {
+    console.error('Error fetching customer invoices:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch customer invoices'
+    });
+  }
+});
+
+// POST /api/finance/customer-invoices/:id/payments - Record a payment against a customer invoice.
+// Auto-generates a receipt collection, updates the invoice balance/status, and marks the order
+// `paid` once the invoice is fully settled.
+router.post('/customer-invoices/:id/payments', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { amountReceived, paymentMethod, date, referenceNo, remarks } = req.body;
+
+    if (!amountReceived || !paymentMethod) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: amountReceived, paymentMethod'
+      });
+    }
+
+    const amount = parseFloat(amountReceived);
+    if (isNaN(amount) || amount <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'amountReceived must be a positive number'
+      });
+    }
+
+    // Load the invoice.
+    const invoiceFilePath = '../data/customer-invoices.json';
+    const invoices = await readFromFile(invoiceFilePath);
+    const invoiceIndex = invoices.findIndex(inv => inv.id === id);
+
+    if (invoiceIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        error: 'Customer invoice not found'
+      });
+    }
+
+    const invoice = invoices[invoiceIndex];
+
+    // Recompute outstanding from existing receipts (handles prior partial payments).
+    const receiptFilePath = '../data/receipt-collections.json';
+    const receipts = await readFromFile(receiptFilePath);
+    const priorReceived = receipts
+      .filter(r => r.invoiceId === id && r.status !== 'draft')
+      .reduce((sum, r) => sum + r.amountReceived, 0);
+    const outstanding = invoice.invoiceAmount - priorReceived;
+
+    if (amount > outstanding + 0.0001) {
+      return res.status(400).json({
+        success: false,
+        error: `Payment (${amount}) cannot exceed outstanding amount (${outstanding})`
+      });
+    }
+
+    // Generate receipt number.
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+    const receiptNumber = `RC-${year}${month}${day}-${random}`;
+
+    // Auto-generate the receipt collection, collected immediately.
+    const receiptCollection = {
+      id: generateId('rc'),
+      receiptNumber,
+      date: date || new Date().toISOString().split('T')[0],
+      customer: invoice.customer,
+      customerInvoiceId: invoice.orderId, // legacy link to the order
+      invoiceId: invoice.id,              // link to the customer invoice
+      invoiceNumber: invoice.invoiceNumber,
+      invoiceAmount: invoice.invoiceAmount,
+      outstandingAmount: outstanding - amount,
+      amountReceived: amount,
+      paymentMethod,
+      bankAccountId: req.body.bankAccountId || null,
+      referenceNo: referenceNo || null,
+      remarks: remarks ? remarks.trim() : undefined,
+      status: 'collected',
+      attachments: req.body.attachments || [],
+      createdAt: new Date().toISOString()
+    };
+
+    receipts.push(receiptCollection);
+    await writeToFile(path.join(__dirname, receiptFilePath), receipts);
+
+    // Recompute invoice totals from all non-draft receipts and set status.
+    const totalReceived = priorReceived + amount;
+    invoice.receivedAmount = totalReceived;
+    invoice.outstandingAmount = invoice.invoiceAmount - totalReceived;
+    invoice.status = totalReceived >= invoice.invoiceAmount - 0.0001
+      ? 'Paid'
+      : 'Partial Paid';
+    invoice.updatedAt = new Date().toISOString();
+    invoices[invoiceIndex] = invoice;
+    await writeToFile(path.join(__dirname, invoiceFilePath), invoices);
+
+    // Only now (invoice fully paid) is the order marked paid.
+    if (invoice.status === 'Paid') {
+      try {
+        await fetch(`http://localhost:${process.env.PORT || 5000}/api/orders/${invoice.orderId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'paid' })
+        });
+      } catch (orderError) {
+        console.log('Note: Could not update order status to paid:', orderError.message);
+      }
+    }
+
+    res.status(201).json({
+      success: true,
+      data: { invoice, receipt: receiptCollection },
+      message: `Receipt ${receiptNumber} recorded. Invoice ${invoice.invoiceNumber} is ${invoice.status}.`
+    });
+  } catch (error) {
+    console.error('Error recording invoice payment:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to record payment: ' + error.message
+    });
+  }
+});
+
 // ==================== OUTSTANDING INVOICES ENDPOINTS ====================
 
 // GET /api/finance/supplier-invoices/outstanding - Get supplier invoices with outstanding balances
@@ -835,46 +1074,72 @@ router.get('/supplier-invoices/outstanding', async (req, res) => {
   }
 });
 
-// GET /api/finance/customer-invoices/outstanding - Get customer invoices with outstanding balances
+// GET /api/finance/customer-invoices/outstanding - Delivered orders awaiting an invoice
+// ("Pending Invoice") plus customer invoices that are Unpaid or Partial Paid. Drives the
+// Accounts "Receivable" tab. Fully-paid invoices (and their now-`paid` orders) are excluded.
 router.get('/customer-invoices/outstanding', async (req, res) => {
   try {
-    // Fetch customer orders
+    // Fetch delivered (signed) orders — status `invoiced`.
     const ordersResponse = await fetch(`http://localhost:${process.env.PORT || 5000}/api/orders`);
     const ordersResult = await ordersResponse.json();
     const orders = ordersResult.success ? ordersResult.data : [];
 
-    // Fetch receipt collections
+    const customerInvoices = await readFromFile('../data/customer-invoices.json');
     const receipts = await readFromFile('../data/receipt-collections.json');
 
-    // Calculate outstanding amounts for each order
-    const outstandingOrders = orders.map(order => {
-      const receivedAmount = receipts
-        .filter(r => r.customerInvoiceId === order.id && r.status !== 'draft')
-        .reduce((sum, r) => sum + r.amountReceived, 0);
+    // Index invoices by orderId so we can tell which orders are already invoiced.
+    const invoiceByOrderId = new Map();
+    customerInvoices.forEach(inv => invoiceByOrderId.set(inv.orderId, inv));
 
-      return {
-        id: order.id,
-        invoiceNumber: order.id, // Use order ID as invoice number
-        customer: order.clientName,
-        customerInvoiceId: order.id,
-        invoiceAmount: order.totalAmount || 0,
-        receivedAmount: receivedAmount,
-        outstandingAmount: (order.totalAmount || 0) - receivedAmount,
-        paymentStatus: receivedAmount >= (order.totalAmount || 0) ? 'PAID' :
-                       receivedAmount > 0 ? 'PARTIAL' : 'PENDING',
-        createdAt: order.createdAt,
-        items: order.items,
-        deliveryAddress: order.deliveryAddress,
-        contactNumber: order.contactNumber
-      };
-    }).filter(order => order.paymentStatus !== 'PAID'); // Only return unpaid orders
+    const receivables = [];
+
+    // 1) Delivered orders that have NOT been invoiced yet -> "Pending Invoice".
+    orders
+      .filter(order => (order.status || '').toLowerCase() === 'invoiced')
+      .forEach(order => {
+        // Already invoiced — shown via its invoice row below.
+        if (invoiceByOrderId.has(order.id)) return;
+        receivables.push({
+          id: order.id,
+          orderId: order.id,
+          invoiceId: null,
+          invoiceNumber: null,
+          customer: order.clientName,
+          invoiceAmount: order.totalAmount || 0,
+          receivedAmount: 0,
+          outstandingAmount: order.totalAmount || 0,
+          paymentStatus: 'Pending Invoice',
+          createdAt: order.createdAt
+        });
+      });
+
+    // 2) Customer invoices that are Unpaid or Partial Paid -> their own row.
+    customerInvoices
+      .filter(inv => inv.status === 'Unpaid' || inv.status === 'Partial Paid')
+      .forEach(inv => {
+        const received = receipts
+          .filter(r => r.invoiceId === inv.id && r.status !== 'draft')
+          .reduce((sum, r) => sum + r.amountReceived, 0);
+        receivables.push({
+          id: inv.id,
+          orderId: inv.orderId,
+          invoiceId: inv.id,
+          invoiceNumber: inv.invoiceNumber,
+          customer: inv.customer,
+          invoiceAmount: inv.invoiceAmount || 0,
+          receivedAmount: received,
+          outstandingAmount: (inv.invoiceAmount || 0) - received,
+          paymentStatus: inv.status, // Unpaid | Partial Paid
+          createdAt: inv.createdAt
+        });
+      });
 
     // Sort by date descending
-    outstandingOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    receivables.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
     res.status(200).json({
       success: true,
-      data: outstandingOrders
+      data: receivables
     });
   } catch (error) {
     console.error('Error fetching outstanding customer invoices:', error);

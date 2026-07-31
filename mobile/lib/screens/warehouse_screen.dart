@@ -77,7 +77,7 @@ Future<InventoryItem?> _pickItem(BuildContext context) async {
 }
 
 class GrnFormTab extends StatefulWidget {
-  const GrnFormTab();
+  const GrnFormTab({super.key});
   @override
   State<GrnFormTab> createState() => _GrnFormTabState();
 }
@@ -224,7 +224,7 @@ class _GrnFormTabState extends State<GrnFormTab> {
 }
 
 class TransferHistoryTab extends StatefulWidget {
-  const TransferHistoryTab();
+  const TransferHistoryTab({super.key});
   @override
   State<TransferHistoryTab> createState() => _TransferHistoryTabState();
 }
@@ -282,7 +282,7 @@ class _TransferHistoryTabState extends State<TransferHistoryTab> {
                     : ListView.separated(
                         padding: const EdgeInsets.all(16),
                         itemCount: _history.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        separatorBuilder: (_, _) => const SizedBox(height: 8),
                         itemBuilder: (context, i) {
                           final t = _history[i];
                           return Card(
@@ -427,7 +427,7 @@ class _TransferDialogState extends State<_TransferDialog> {
 }
 
 class StockTakeTab extends StatefulWidget {
-  const StockTakeTab();
+  const StockTakeTab({super.key});
   @override
   State<StockTakeTab> createState() => _StockTakeTabState();
 }
@@ -485,7 +485,7 @@ class _StockTakeTabState extends State<StockTakeTab> {
                     : ListView.separated(
                         padding: const EdgeInsets.all(16),
                         itemCount: _history.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        separatorBuilder: (_, _) => const SizedBox(height: 8),
                         itemBuilder: (context, i) {
                           final t = _history[i];
                           return Card(

@@ -90,7 +90,7 @@ class _SalesScreenState extends State<SalesScreen> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 16, vertical: 8),
                           itemCount: filtered.length,
-                          separatorBuilder: (_, __) =>
+                          separatorBuilder: (_, _) =>
                               const SizedBox(height: 8),
                           itemBuilder: (context, i) =>
                               _OrderTile(order: filtered[i]),

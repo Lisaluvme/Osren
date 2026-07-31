@@ -96,9 +96,12 @@ class StatusChip extends StatelessWidget {
       tone = StatusTone.success;
     } else if ([
       'pending',
+      'pending invoice',
       'draft',
       'in transit',
       'submitted',
+      'unpaid',
+      'partial paid',
     ].contains(lower)) {
       tone = StatusTone.warning;
     } else if ([

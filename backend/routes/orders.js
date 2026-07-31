@@ -238,6 +238,19 @@ const updateInventoryAfterOrder = async (items) => {
   }
 };
 
+// Consolidated loader: sheet-first, merged with any in-memory orders not yet
+// reflected in the sheet. Keeps GET /, GET /:id, PUT and PATCH consistent so an
+// order created this run is always findable even when the sheet read is empty
+// (e.g. the sheet write failed silently or the Orders tab doesn't exist yet).
+const getAllOrders = async () => {
+  let allOrders = googleSheetsService.enabled ? await loadOrdersFromSheets() : [...orders];
+  if (googleSheetsService.enabled) {
+    const sheetIds = new Set(allOrders.map(o => o.id));
+    allOrders = [...orders.filter(o => !sheetIds.has(o.id)), ...allOrders];
+  }
+  return allOrders;
+};
+
 // POST /api/orders - Create new order
 router.post('/', async (req, res) => {
   try {
@@ -334,15 +347,8 @@ router.get('/', async (req, res) => {
   try {
     const { status, client, limit = 50 } = req.query;
 
-    // Load orders from Google Sheets if enabled, otherwise use memory
-    let allOrders = googleSheetsService.enabled ? await loadOrdersFromSheets() : [...orders];
-
-    // Also merge with any in-memory orders that might not be in Sheets yet
-    if (googleSheetsService.enabled && orders.length > 0) {
-      const sheetOrderIds = new Set(allOrders.map(o => o.id));
-      const newMemoryOrders = orders.filter(o => !sheetOrderIds.has(o.id));
-      allOrders = [...newMemoryOrders, ...allOrders];
-    }
+    // Load orders (sheet-first, merged with any in-memory orders not yet in the sheet)
+    let allOrders = await getAllOrders();
 
     let filteredOrders = [...allOrders];
 
@@ -380,9 +386,10 @@ router.get('/', async (req, res) => {
 });
 
 // GET /api/orders/:id - Get specific order
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
-    const order = orders.find(o => o.id === req.params.id);
+    const allOrders = await getAllOrders();
+    const order = allOrders.find(o => o.id === req.params.id);
 
     if (!order) {
       return res.status(404).json({
@@ -409,8 +416,8 @@ router.put('/:id', async (req, res) => {
   try {
     const { status, deliveryAddress, contactNumber, notes } = req.body;
 
-    // Try to load from Google Sheets first
-    let allOrders = googleSheetsService.enabled ? await loadOrdersFromSheets() : [...orders];
+    // Load orders (sheet-first, merged with any in-memory orders not yet in the sheet)
+    let allOrders = await getAllOrders();
     const orderIndex = allOrders.findIndex(o => o.id === req.params.id);
 
     if (orderIndex === -1) {
@@ -469,8 +476,8 @@ router.patch('/:id', async (req, res) => {
       });
     }
 
-    // Try to load from Google Sheets first
-    let allOrders = googleSheetsService.enabled ? await loadOrdersFromSheets() : [...orders];
+    // Load orders (sheet-first, merged with any in-memory orders not yet in the sheet)
+    let allOrders = await getAllOrders();
     const orderIndex = allOrders.findIndex(o => o.id === req.params.id);
 
     if (orderIndex === -1) {

@@ -79,8 +79,8 @@ class InventoryService {
       'itemId': itemId,
       'itemName': itemName,
       'quantityReceived': quantityReceived,
-      if (unitCost != null) 'unitCost': unitCost,
-      if (remarks != null) 'remarks': remarks,
+      'unitCost': ?unitCost,
+      'remarks': ?remarks,
     });
   }
 
@@ -109,7 +109,7 @@ class InventoryService {
       'itemId': itemId,
       'itemName': itemName,
       'quantity': quantity,
-      if (remarks != null) 'remarks': remarks,
+      'remarks': ?remarks,
     });
   }
 
@@ -140,8 +140,8 @@ class InventoryService {
       'systemQuantity': systemQuantity,
       'actualQuantity': actualQuantity,
       'variance': actualQuantity - systemQuantity,
-      if (varianceReason != null) 'varianceReason': varianceReason,
-      if (remarks != null) 'remarks': remarks,
+      'varianceReason': ?varianceReason,
+      'remarks': ?remarks,
     });
   }
 

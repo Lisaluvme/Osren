@@ -32,7 +32,9 @@ class SupplierInvoice {
       supplier: (json['supplier'] ?? '').toString(),
       invoiceDate: (json['invoiceDate'] ?? '').toString(),
       amount: (json['amount'] ?? 0) as num,
-      paymentStatus: (json['paymentStatus'] ?? 'PENDING').toString().toUpperCase(),
+      paymentStatus: (json['paymentStatus'] ?? 'PENDING')
+          .toString()
+          .toUpperCase(),
       remarks: json['remarks'] as String?,
     );
   }
@@ -114,6 +116,59 @@ class ReceiptCollection {
       paymentMethod: (json['paymentMethod'] ?? 'OTHER').toString(),
       referenceNo: json['referenceNo'] as String?,
       status: json['status'] as String?,
+    );
+  }
+}
+
+/// Receivable shown in the Accounts "Receivable" tab. Mirrors
+/// `/api/finance/customer-invoices/outstanding`.
+///
+/// Lifecycle: a delivered (signed) order first appears as `Pending Invoice`
+/// ([invoiceId] is null — no invoice created yet). Once Accounts creates an
+/// invoice, [invoiceId] is set and [paymentStatus] moves `Unpaid` →
+/// `Partial Paid` → `Paid`. The status label is kept verbatim (title case)
+/// for display.
+@immutable
+class CustomerInvoice {
+  final String id;
+  final String orderId;
+  final String? invoiceId;
+  final String? invoiceNumber;
+  final String customer;
+  final num invoiceAmount;
+  final num receivedAmount;
+  final num outstandingAmount;
+  final String paymentStatus;
+  final String createdAt;
+
+  const CustomerInvoice({
+    required this.id,
+    required this.orderId,
+    required this.customer,
+    required this.invoiceAmount,
+    required this.receivedAmount,
+    required this.outstandingAmount,
+    required this.paymentStatus,
+    required this.createdAt,
+    this.invoiceId,
+    this.invoiceNumber,
+  });
+
+  /// Delivered order awaiting invoice creation — no invoice record yet.
+  bool get isPendingInvoice => invoiceId == null;
+
+  factory CustomerInvoice.fromJson(Map<String, dynamic> json) {
+    return CustomerInvoice(
+      id: (json['id'] ?? '').toString(),
+      orderId: (json['orderId'] ?? json['customerInvoiceId'] ?? '').toString(),
+      invoiceId: json['invoiceId']?.toString(),
+      invoiceNumber: json['invoiceNumber']?.toString(),
+      customer: (json['customer'] ?? '').toString(),
+      invoiceAmount: (json['invoiceAmount'] ?? 0) as num,
+      receivedAmount: (json['receivedAmount'] ?? 0) as num,
+      outstandingAmount: (json['outstandingAmount'] ?? 0) as num,
+      paymentStatus: (json['paymentStatus'] ?? 'Pending Invoice').toString(),
+      createdAt: (json['createdAt'] ?? '').toString(),
     );
   }
 }
