@@ -459,6 +459,67 @@ class GoogleSheetsService {
     }
   }
 
+  // Upload a generated business PDF (DO / Invoice / Receipt) to Google Drive.
+  // Mirrors uploadImage() but is PDF-specific. Returns the Drive fileId plus a
+  // direct download URL (webContentLink — used by the in-app viewer) and a
+  // browser view URL (webViewLink).
+  async uploadPdf(fileBuffer, fileName, docType) {
+    try {
+      const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+      if (!folderId) {
+        throw new Error(
+          'GOOGLE_DRIVE_FOLDER_ID not set. Please configure your Google Drive Shared Drive.'
+        );
+      }
+
+      const stream = new Readable();
+      stream.push(fileBuffer);
+      stream.push(null);
+
+      console.log(`Uploading PDF to Google Drive: ${fileName} (${docType})`);
+      const file = await this.drive.files.create({
+        resource: {
+          name: fileName,
+          parents: [folderId],
+        },
+        media: {
+          mimeType: 'application/pdf',
+          body: stream,
+        },
+        fields: 'id,webContentLink,webViewLink',
+        supportsAllDrives: true,
+      });
+
+      const fileId = file.data.id;
+      const downloadUrl = file.data.webContentLink;
+      const viewUrl = file.data.webViewLink;
+
+      // Make the file readable via direct link (anyone with the link).
+      try {
+        await this.drive.permissions.create({
+          fileId,
+          resource: { role: 'reader', type: 'anyone' },
+          supportsAllDrives: true,
+        });
+      } catch (permError) {
+        console.log('⚠️  Could not set public permissions on PDF:', permError.message);
+      }
+
+      console.log('✅ PDF uploaded to Google Drive. File ID:', fileId);
+
+      return {
+        success: true,
+        fileId,
+        downloadUrl,
+        viewUrl,
+      };
+    } catch (error) {
+      console.error('=== Google Drive PDF Upload Failed ===');
+      console.error('Error:', error.message);
+      throw error;
+    }
+  }
+
   // Update inventory item with image information
   async updateItemImage(itemId, imageFileId, imageUrl) {
     try {

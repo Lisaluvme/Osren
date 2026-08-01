@@ -1,5 +1,6 @@
 import 'api_client.dart';
 import 'auth_service.dart';
+import 'documents_service.dart';
 import 'finance_service.dart';
 import 'inventory_service.dart';
 import 'notification_service.dart';
@@ -17,6 +18,7 @@ class AppServices {
   late final InventoryService inventory = InventoryService(api);
   late final OrdersService orders = OrdersService(api);
   late final FinanceService finance = FinanceService(api);
+  late final DocumentsService documents = DocumentsService(api);
   late final NotificationService notifications = NotificationService(api);
 
   /// Apply a runtime base URL (Settings screen) and persist it.

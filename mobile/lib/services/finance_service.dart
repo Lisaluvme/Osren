@@ -54,7 +54,7 @@ class FinanceService {
   /// against a customer invoice. Auto-generates a receipt, updates the
   /// invoice balance/status, and marks the order `paid` once settled.
   /// Returns the updated invoice.
-  Future<CustomerInvoice> recordInvoicePayment({
+  Future<ReceiptCollection> recordInvoicePayment({
     required String invoiceId,
     required num amountReceived,
     required String paymentMethod,
@@ -71,9 +71,9 @@ class FinanceService {
       },
     );
     final map = data is Map<String, dynamic> ? data : <String, dynamic>{};
-    // Endpoint returns { invoice, receipt }; fall back to the payload itself.
-    final invoice = map['invoice'] ?? map;
-    return CustomerInvoice.fromJson(invoice as Map<String, dynamic>);
+    // Endpoint returns { invoice, receipt }; return the receipt for printing.
+    final receipt = map['receipt'] ?? map;
+    return ReceiptCollection.fromJson(receipt as Map<String, dynamic>);
   }
 
   /// `POST /api/finance/payment-voucher`.

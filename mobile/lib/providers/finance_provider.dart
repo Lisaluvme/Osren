@@ -81,8 +81,9 @@ class FinanceProvider extends ChangeNotifier {
 
   /// Record a payment against a customer invoice [invoiceId]. Auto-generates a
   /// receipt, updates the invoice balance/status (Partial Paid / Paid), and
-  /// marks the order `paid` once settled. Returns true on success.
-  Future<bool> recordPayment(
+  /// marks the order `paid` once settled. Returns the generated receipt on
+  /// success (so the caller can print/share it), or null on failure.
+  Future<ReceiptCollection?> recordPayment(
     String invoiceId, {
     required num amount,
     required String method,
@@ -90,7 +91,7 @@ class FinanceProvider extends ChangeNotifier {
     String? remarks,
   }) async {
     try {
-      await _services.finance.recordInvoicePayment(
+      final receipt = await _services.finance.recordInvoicePayment(
         invoiceId: invoiceId,
         amountReceived: amount,
         paymentMethod: method,
@@ -98,11 +99,11 @@ class FinanceProvider extends ChangeNotifier {
         remarks: remarks,
       );
       await load();
-      return true;
+      return receipt;
     } catch (e) {
       _error = e.toString();
       notifyListeners();
-      return false;
+      return null;
     }
   }
 }

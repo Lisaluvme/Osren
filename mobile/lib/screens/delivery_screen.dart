@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/order.dart';
 import '../providers/orders_provider.dart';
 import '../services/delivery_pdf_service.dart';
+import '../services/services.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
+import 'pdf_viewer_screen.dart';
 import 'signature_pad_screen.dart';
 
 /// Driver delivery run list. Shows orders that are ready to deliver
@@ -267,9 +268,30 @@ class _DeliveryTile extends StatelessWidget {
 
   Future<void> _viewReport(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
+    final documents = context.read<AppServices>().documents;
     try {
       final bytes = await generateDeliveryOrderPdf(order);
-      await Printing.sharePdf(bytes: bytes, filename: 'DO-${order.id}.pdf');
+      // Best-effort: record the DO so it's downloadable in Accounts too.
+      try {
+        await documents.upload(
+          bytes: bytes,
+          docType: 'DO',
+          refId: order.id,
+          docNumber: 'DO-${order.id}',
+        );
+      } catch (_) {
+        // Supabase may not be configured yet; viewing still works.
+      }
+      if (!context.mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => PdfViewerScreen(
+            bytes: bytes,
+            title: 'Delivery Order',
+            shareFilename: 'DO-${order.id}.pdf',
+          ),
+        ),
+      );
     } catch (e) {
       messenger.showSnackBar(SnackBar(
         content: Text('Could not generate DO report: $e'),
@@ -287,12 +309,33 @@ class _DeliveryTile extends StatelessWidget {
     if (dataUrl == null) return;
     if (!context.mounted) return;
     final orders = context.read<OrdersProvider>();
+    final documents = context.read<AppServices>().documents;
     final messenger = ScaffoldMessenger.of(context);
     final ok = await orders.signAndComplete(order.id, dataUrl);
+
+    var message = ok ? 'Signed — sent to Accounts' : 'Could not save signature';
+    if (ok) {
+      // Auto-generate the signed Delivery Order and record it, so Accounts can
+      // display the DO + signature for this order. Best-effort: the signature
+      // itself was already saved above even if this upload fails.
+      try {
+        final bytes =
+            await generateDeliveryOrderPdf(order.copyWith(signature: dataUrl));
+        await documents.upload(
+          bytes: bytes,
+          docType: 'DO',
+          refId: order.id,
+          docNumber: 'DO-${order.id}',
+        );
+        message = 'Signed — sent to Accounts (DO saved)';
+      } catch (_) {
+        // Signature saved; DO upload is best-effort.
+      }
+    }
+
     messenger.showSnackBar(
       SnackBar(
-        content:
-            Text(ok ? 'Signed — sent to Accounts' : 'Could not save signature'),
+        content: Text(message),
         backgroundColor: ok ? AppTheme.success : AppTheme.danger,
       ),
     );

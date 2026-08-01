@@ -1,10 +1,17 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/finance.dart';
 import '../providers/finance_provider.dart';
+import '../services/invoice_pdf_service.dart';
+import '../services/receipt_pdf_service.dart';
+import '../services/services.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
+import 'pdf_viewer_screen.dart';
 
 /// Accounts payable / receivable overview.
 ///
@@ -183,6 +190,7 @@ class _ReceivableListState extends State<_ReceivableList> {
                   ],
                 ),
               ),
+              _DeliveryProof(r),
               Padding(
                 padding: const EdgeInsets.only(right: 8, bottom: 8),
                 child: Row(
@@ -194,12 +202,19 @@ class _ReceivableListState extends State<_ReceivableList> {
                         label: const Text('Create Invoice'),
                         onPressed: acting ? null : () => _createInvoice(r),
                       )
-                    else
+                    else ...[
+                      IconButton.outlined(
+                        tooltip: 'Print / save invoice',
+                        icon: const Icon(Icons.picture_as_pdf_outlined, size: 20),
+                        onPressed: acting ? null : () => _printInvoice(r),
+                      ),
+                      const SizedBox(width: 8),
                       ElevatedButton.icon(
                         icon: const Icon(Icons.payments, size: 18),
                         label: const Text('Record Payment'),
                         onPressed: acting ? null : () => _recordPayment(r),
                       ),
+                    ],
                     if (acting) ...[
                       const SizedBox(width: 12),
                       const SizedBox(
@@ -235,7 +250,7 @@ class _ReceivableListState extends State<_ReceivableList> {
     final input = await _showPaymentSheet(r);
     if (input == null || !mounted) return;
     setState(() => _busyId = r.id);
-    final ok = await fin.recordPayment(
+    final receipt = await fin.recordPayment(
       r.invoiceId!,
       amount: input.amount,
       method: input.method,
@@ -243,12 +258,93 @@ class _ReceivableListState extends State<_ReceivableList> {
     );
     if (!mounted) return;
     setState(() => _busyId = null);
-    _snack(
-      ok
-          ? 'Payment recorded for ${r.customer}'
-          : (fin.error ?? 'Could not record payment'),
-      ok: ok,
-    );
+    if (receipt == null) {
+      _snack(fin.error ?? 'Could not record payment', ok: false);
+      return;
+    }
+    _snack('Payment recorded for ${r.customer}', ok: true);
+    // Remaining balance after this payment (never negative).
+    final balance =
+        (r.outstandingAmount - input.amount).clamp(0, r.outstandingAmount);
+    await _shareAndUploadReceipt(receipt, balanceDue: balance);
+  }
+
+  /// Generate the Invoice PDF, open the system share/print sheet, then upload
+  /// it so it's recorded and downloadable.
+  Future<void> _printInvoice(CustomerInvoice r) async {
+    setState(() => _busyId = r.id);
+    try {
+      final bytes = await generateInvoicePdf(r);
+      await _uploadPdf(
+        bytes,
+        docType: 'INVOICE',
+        refId: r.invoiceId ?? r.id,
+        docNumber: r.invoiceNumber ?? r.id,
+      );
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => PdfViewerScreen(
+            bytes: bytes,
+            title: 'Invoice ${r.invoiceNumber ?? ''}'.trim(),
+            shareFilename: '${r.invoiceNumber ?? r.id}.pdf',
+          ),
+        ),
+      );
+    } catch (e) {
+      _snack('Could not generate invoice PDF', ok: false);
+    }
+    if (!mounted) return;
+    setState(() => _busyId = null);
+  }
+
+  /// Generate the Receipt PDF, open the share/print sheet, then upload it.
+  Future<void> _shareAndUploadReceipt(
+    ReceiptCollection receipt, {
+    num? balanceDue,
+  }) async {
+    try {
+      final bytes = await generateReceiptPdf(receipt, balanceDue: balanceDue);
+      await _uploadPdf(
+        bytes,
+        docType: 'RECEIPT',
+        refId: receipt.id,
+        docNumber: receipt.receiptNumber,
+      );
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => PdfViewerScreen(
+            bytes: bytes,
+            title: 'Receipt ${receipt.receiptNumber}',
+            shareFilename: '${receipt.receiptNumber}.pdf',
+          ),
+        ),
+      );
+    } catch (e) {
+      // Payment was already recorded; viewing/upload is best-effort.
+      debugPrint('Receipt PDF failed: $e');
+    }
+  }
+
+  /// Upload a generated PDF so it's durably recorded. Best-effort: Supabase may
+  /// not be configured yet, in which case the share/print above still worked.
+  Future<void> _uploadPdf(
+    Uint8List bytes, {
+    required String docType,
+    required String refId,
+    required String docNumber,
+  }) async {
+    try {
+      await context.read<AppServices>().documents.upload(
+            bytes: bytes,
+            docType: docType,
+            refId: refId,
+            docNumber: docNumber,
+          );
+    } catch (e) {
+      debugPrint('PDF upload failed: $e');
+    }
   }
 
   /// Amount + method + reference form for recording a payment.
@@ -384,6 +480,125 @@ class _PaymentInput {
   final num amount;
   final String method;
   final String? reference;
+}
+
+/// Expandable proof-of-delivery block on a receivable card: the captured
+/// signature, order line items, delivery address/contact, and a button to open
+/// the signed Delivery Order PDF in-app. Hidden when there's nothing to show.
+class _DeliveryProof extends StatelessWidget {
+  const _DeliveryProof(this.r);
+  final CustomerInvoice r;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasSig = r.signature != null && r.signature!.isNotEmpty;
+    final hasAddr = r.deliveryAddress != null && r.deliveryAddress!.isNotEmpty;
+    final hasContact = r.contactNumber != null && r.contactNumber!.isNotEmpty;
+    final hasItems = r.items.isNotEmpty;
+    final hasDo = r.doUrl != null && r.doUrl!.isNotEmpty;
+
+    if (!hasSig && !hasAddr && !hasContact && !hasItems && !hasDo) {
+      return const SizedBox.shrink();
+    }
+
+    return ExpansionTile(
+      tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+      dense: true,
+      title: const Row(
+        children: [
+          Icon(Icons.verified_outlined, size: 18, color: AppTheme.success),
+          SizedBox(width: 8),
+          Text('Delivery proof & order', style: TextStyle(fontSize: 13)),
+        ],
+      ),
+      children: [
+        if (hasSig)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Customer signature',
+                    style: TextStyle(fontSize: 11, color: AppTheme.slate)),
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                        color: AppTheme.slate.withValues(alpha: 0.3)),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child:
+                      Image.memory(_signatureBytes(r.signature!), height: 64),
+                ),
+              ],
+            ),
+          ),
+        if (hasAddr)
+          ListTile(
+            dense: true,
+            leading: const Icon(Icons.location_on_outlined,
+                size: 20, color: AppTheme.primary),
+            title: Text(r.deliveryAddress!,
+                style: const TextStyle(fontSize: 13)),
+          ),
+        if (hasContact)
+          ListTile(
+            dense: true,
+            leading: const Icon(Icons.phone_outlined,
+                size: 20, color: AppTheme.primary),
+            title: Text(r.contactNumber!,
+                style: const TextStyle(fontSize: 13)),
+          ),
+        for (final item in r.items)
+          ListTile(
+            dense: true,
+            leading:
+                const Icon(Icons.circle, size: 8, color: AppTheme.primary),
+            title: Text(item.name),
+            trailing: Text(
+              '${item.quantity} × ${formatMoney(item.unitPrice)}',
+              style: const TextStyle(fontSize: 13),
+            ),
+          ),
+        if (r.notes != null && r.notes!.isNotEmpty)
+          ListTile(
+            dense: true,
+            leading: const Icon(Icons.sticky_note_2_outlined,
+                size: 20, color: AppTheme.slate),
+            title:
+                Text(r.notes!, style: const TextStyle(fontSize: 13)),
+          ),
+        if (hasDo)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+                label: const Text('View signed DO'),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => PdfViewerScreen(
+                      url: r.doUrl,
+                      title: 'Delivery Order',
+                      shareFilename: 'DO-${r.orderId}.pdf',
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// Decode the signature data URL (`data:image/png;base64,...`) to raw bytes for
+/// [Image.memory].
+Uint8List _signatureBytes(String dataUrl) {
+  final b64 = dataUrl.contains(',') ? dataUrl.split(',').last : dataUrl;
+  return base64Decode(b64);
 }
 
 class _InvoiceList extends StatelessWidget {

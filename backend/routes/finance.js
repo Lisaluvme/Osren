@@ -1,6 +1,7 @@
 const express = require('express');
 const path = require('path');
 const router = express.Router();
+const { client: supabase, configured: supabaseConfigured } = require('../services/supabaseService');
 
 console.log('🔧 Finance routes initialized');
 
@@ -1074,9 +1075,37 @@ router.get('/supplier-invoices/outstanding', async (req, res) => {
   }
 });
 
+// Latest signed-DO PDF URL per order id, from the Supabase `documents` ledger
+// (rows written by POST /api/pdfs with doc_type 'DO'). Returns Map<orderId, url>.
+// Empty map when Supabase isn't configured — Accounts simply hides the "View DO".
+async function fetchDoUrls(orderIds) {
+  const map = new Map();
+  if (!orderIds.length || !supabaseConfigured || !supabase) return map;
+  try {
+    const { data, error } = await supabase
+      .from('documents')
+      .select('ref_id, public_url, created_at')
+      .eq('doc_type', 'DO')
+      .in('ref_id', orderIds);
+    if (error || !Array.isArray(data)) return map;
+    for (const row of data) {
+      const existing = map.get(row.ref_id);
+      if (!existing || new Date(row.created_at) > new Date(existing.createdAt)) {
+        map.set(row.ref_id, { url: row.public_url, createdAt: row.created_at });
+      }
+    }
+    for (const [k, v] of map) map.set(k, v.url);
+  } catch (e) {
+    console.error('fetchDoUrls failed:', e.message);
+  }
+  return map;
+}
+
 // GET /api/finance/customer-invoices/outstanding - Delivered orders awaiting an invoice
 // ("Pending Invoice") plus customer invoices that are Unpaid or Partial Paid. Drives the
-// Accounts "Receivable" tab. Fully-paid invoices (and their now-`paid` orders) are excluded.
+// Accounts "Receivable" tab. Each row also carries the proof-of-delivery signature, the
+// order line items / delivery address, and the signed DO PDF URL (doUrl) so the Accounts
+// tab can render the signed DO + signature + order details. Fully-paid invoices excluded.
 router.get('/customer-invoices/outstanding', async (req, res) => {
   try {
     // Fetch delivered (signed) orders — status `invoiced`.
@@ -1084,12 +1113,23 @@ router.get('/customer-invoices/outstanding', async (req, res) => {
     const ordersResult = await ordersResponse.json();
     const orders = ordersResult.success ? ordersResult.data : [];
 
+    const orderById = new Map(orders.map(o => [o.id, o]));
+
     const customerInvoices = await readFromFile('../data/customer-invoices.json');
     const receipts = await readFromFile('../data/receipt-collections.json');
 
     // Index invoices by orderId so we can tell which orders are already invoiced.
     const invoiceByOrderId = new Map();
     customerInvoices.forEach(inv => invoiceByOrderId.set(inv.orderId, inv));
+
+    // Proof-of-delivery details copied from the underlying order onto a receivable row.
+    const deliveryInfo = (order) => ({
+      signature: order?.signature || null,
+      items: Array.isArray(order?.items) ? order.items : [],
+      deliveryAddress: order?.deliveryAddress || null,
+      contactNumber: order?.contactNumber || null,
+      notes: order?.notes || null,
+    });
 
     const receivables = [];
 
@@ -1109,7 +1149,8 @@ router.get('/customer-invoices/outstanding', async (req, res) => {
           receivedAmount: 0,
           outstandingAmount: order.totalAmount || 0,
           paymentStatus: 'Pending Invoice',
-          createdAt: order.createdAt
+          createdAt: order.createdAt,
+          ...deliveryInfo(order),
         });
       });
 
@@ -1130,9 +1171,17 @@ router.get('/customer-invoices/outstanding', async (req, res) => {
           receivedAmount: received,
           outstandingAmount: (inv.invoiceAmount || 0) - received,
           paymentStatus: inv.status, // Unpaid | Partial Paid
-          createdAt: inv.createdAt
+          createdAt: inv.createdAt,
+          ...deliveryInfo(orderById.get(inv.orderId)),
         });
       });
+
+    // Attach the latest signed-DO PDF URL per order from the documents ledger.
+    const orderIds = [...new Set(receivables.map(r => r.orderId).filter(Boolean))];
+    const doUrlByOrderId = await fetchDoUrls(orderIds);
+    receivables.forEach(r => {
+      r.doUrl = (r.orderId && doUrlByOrderId.get(r.orderId)) || null;
+    });
 
     // Sort by date descending
     receivables.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));

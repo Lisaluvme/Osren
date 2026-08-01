@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -79,6 +80,29 @@ class ApiClient {
       headers: _headers(json: true),
       body: body == null ? null : jsonEncode(body),
     );
+    return _decode(res);
+  }
+
+  /// Multipart POST — uploads [bytes] as a file (default field name `file`)
+  /// alongside string [fields]. Used by the documents upload endpoint. Returns
+  /// the decoded `data` payload.
+  Future<dynamic> multipartPost(
+    String path, {
+    required Uint8List bytes,
+    required String filename,
+    String fileField = 'file',
+    Map<String, String> fields = const {},
+    Map<String, String> query = const {},
+  }) async {
+    final uri = _uri(path, query.isNotEmpty ? query : null);
+    final req = http.MultipartRequest('POST', uri)
+      ..headers.addAll(_headers())
+      ..fields.addAll(fields);
+    req.files.add(
+      http.MultipartFile.fromBytes(fileField, bytes, filename: filename),
+    );
+    final streamed = await _client.send(req);
+    final res = await http.Response.fromStream(streamed);
     return _decode(res);
   }
 

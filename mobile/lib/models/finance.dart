@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import 'order.dart';
+
 /// Supplier invoice (AP), mirrored from the (currently unmounted) finance
 /// route `/api/finance/supplier-invoices`. Field names match the backend.
 @immutable
@@ -141,6 +143,15 @@ class CustomerInvoice {
   final String paymentStatus;
   final String createdAt;
 
+  /// Proof-of-delivery + order context, attached by the backend's outstanding
+  /// endpoint so the Accounts tab can show the signed DO + signature + items.
+  final String? signature;
+  final String? doUrl;
+  final String? deliveryAddress;
+  final String? contactNumber;
+  final String? notes;
+  final List<OrderLineItem> items;
+
   const CustomerInvoice({
     required this.id,
     required this.orderId,
@@ -152,12 +163,19 @@ class CustomerInvoice {
     required this.createdAt,
     this.invoiceId,
     this.invoiceNumber,
+    this.signature,
+    this.doUrl,
+    this.deliveryAddress,
+    this.contactNumber,
+    this.notes,
+    this.items = const [],
   });
 
   /// Delivered order awaiting invoice creation — no invoice record yet.
   bool get isPendingInvoice => invoiceId == null;
 
   factory CustomerInvoice.fromJson(Map<String, dynamic> json) {
+    final rawItems = (json['items'] as List<dynamic>?) ?? const [];
     return CustomerInvoice(
       id: (json['id'] ?? '').toString(),
       orderId: (json['orderId'] ?? json['customerInvoiceId'] ?? '').toString(),
@@ -169,6 +187,14 @@ class CustomerInvoice {
       outstandingAmount: (json['outstandingAmount'] ?? 0) as num,
       paymentStatus: (json['paymentStatus'] ?? 'Pending Invoice').toString(),
       createdAt: (json['createdAt'] ?? '').toString(),
+      signature: json['signature'] as String?,
+      doUrl: json['doUrl'] as String?,
+      deliveryAddress: json['deliveryAddress'] as String?,
+      contactNumber: json['contactNumber'] as String?,
+      notes: json['notes'] as String?,
+      items: rawItems
+          .map((e) => OrderLineItem.fromJson(e as Map<String, dynamic>))
+          .toList(growable: false),
     );
   }
 }

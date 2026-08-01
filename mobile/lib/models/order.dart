@@ -139,6 +139,35 @@ class SalesOrder {
     );
   }
 
+  /// Copy with overrides. Used to attach the just-captured signature before
+  /// regenerating the Delivery Order PDF on sign-and-send.
+  SalesOrder copyWith({
+    String? clientName,
+    List<OrderLineItem> items = const [],
+    int? totalItems,
+    num? totalAmount,
+    OrderStatus? status,
+    String? createdAt,
+    String? deliveryAddress,
+    String? contactNumber,
+    String? notes,
+    String? signature,
+  }) {
+    return SalesOrder(
+      id: id,
+      clientName: clientName ?? this.clientName,
+      items: items.isNotEmpty ? items : this.items,
+      totalItems: totalItems ?? this.totalItems,
+      totalAmount: totalAmount ?? this.totalAmount,
+      status: status ?? this.status,
+      createdAt: createdAt ?? this.createdAt,
+      deliveryAddress: deliveryAddress ?? this.deliveryAddress,
+      contactNumber: contactNumber ?? this.contactNumber,
+      notes: notes ?? this.notes,
+      signature: signature ?? this.signature,
+    );
+  }
+
   Map<String, dynamic> toJson() => {
         'clientName': clientName,
         'items': items.map((e) => e.toJson()).toList(),

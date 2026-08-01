@@ -121,6 +121,14 @@ try {
   console.error('❌ Error loading orders routes:', error.message);
 }
 
+// Generated business PDFs (DO / Invoice / Receipt) → Supabase Storage
+try {
+  app.use('/api/pdfs', require('./routes/pdfs'));
+  console.log('✅ PDF routes loaded');
+} catch (error) {
+  console.error('❌ Error loading PDF routes:', error.message);
+}
+
 try {
   app.use('/api/images', require('./routes/images'));
   console.log('✅ Image routes loaded');
