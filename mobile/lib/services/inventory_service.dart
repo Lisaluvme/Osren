@@ -84,67 +84,6 @@ class InventoryService {
     });
   }
 
-  /// `GET /api/inventory/transfer-history`.
-  Future<List<StockTransfer>> transferHistory() async {
-    final data = await _api.get('/inventory/transfer-history');
-    return _asList(data).map(StockTransfer.fromJson).toList();
-  }
-
-  /// `POST /api/inventory/stock-transfer`.
-  Future<void> createTransfer({
-    required String transferNumber,
-    required String date,
-    required String fromWarehouse,
-    required String toWarehouse,
-    required String itemId,
-    required String itemName,
-    required num quantity,
-    String? remarks,
-  }) async {
-    await _api.post('/inventory/stock-transfer', body: {
-      'transferNumber': transferNumber,
-      'date': date,
-      'fromWarehouse': fromWarehouse,
-      'toWarehouse': toWarehouse,
-      'itemId': itemId,
-      'itemName': itemName,
-      'quantity': quantity,
-      'remarks': ?remarks,
-    });
-  }
-
-  /// `GET /api/inventory/stock-take-history`.
-  Future<List<StockTake>> stockTakeHistory() async {
-    final data = await _api.get('/inventory/stock-take-history');
-    return _asList(data).map(StockTake.fromJson).toList();
-  }
-
-  /// `POST /api/inventory/stock-take`.
-  Future<void> createStockTake({
-    required String stockTakeNumber,
-    required String date,
-    required String warehouse,
-    required String itemId,
-    required String itemName,
-    required num systemQuantity,
-    required num actualQuantity,
-    String? varianceReason,
-    String? remarks,
-  }) async {
-    await _api.post('/inventory/stock-take', body: {
-      'stockTakeNumber': stockTakeNumber,
-      'date': date,
-      'warehouse': warehouse,
-      'itemId': itemId,
-      'itemName': itemName,
-      'systemQuantity': systemQuantity,
-      'actualQuantity': actualQuantity,
-      'variance': actualQuantity - systemQuantity,
-      'varianceReason': ?varianceReason,
-      'remarks': ?remarks,
-    });
-  }
-
   List<InventoryItem> _parseItems(dynamic data) {
     final raw = data is Map<String, dynamic> && data.containsKey('items')
         ? data['items']
