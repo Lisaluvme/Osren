@@ -4,7 +4,7 @@
   "description": "Backend API for OSREN Integrated Ops Manager",
   "main": "server.js",
   "engines": {
-    "node": "20.x"
+    "node": "22.x"
   },
   "scripts": {
     "start": "node server.js",
